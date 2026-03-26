@@ -83,7 +83,7 @@ const guides: Guide[] = [
   },
 ]
 
-type PhotoEntry = { id: string; url: string }
+type PhotoEntry = { id: string; url: string; file: File }
 
 export default function SellPage() {
   const router = useRouter()
@@ -130,6 +130,25 @@ export default function SellPage() {
     setPublishing(true)
     setPublishError(null)
 
+    // Upload photos to Supabase Storage
+    const uploadedUrls: string[] = []
+    for (const photo of photos) {
+      const ext = photo.file.name.split('.').pop()?.toLowerCase() || 'jpg'
+      const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+      const { error: uploadError } = await supabase.storage
+        .from('listing-images')
+        .upload(path, photo.file, { contentType: photo.file.type, upsert: false })
+      if (uploadError) {
+        console.warn('[upload] storage error:', uploadError.message)
+        continue
+      }
+      const { data: { publicUrl } } = supabase.storage
+        .from('listing-images')
+        .getPublicUrl(path)
+      uploadedUrls.push(publicUrl)
+      console.log('[upload] uploaded:', publicUrl)
+    }
+
     const payload = {
       seller_id: userId,
       title_az: form.title_az.trim(),
@@ -140,7 +159,7 @@ export default function SellPage() {
       size: form.size || null,
       brand: form.brand.trim() || null,
       condition: form.condition as 'new' | 'good' | 'fair',
-      images: [] as string[],
+      images: uploadedUrls,
       status: 'active',
     }
 
@@ -167,6 +186,7 @@ export default function SellPage() {
     const newPhotos: PhotoEntry[] = toAdd.map((file) => ({
       id: Math.random().toString(36).slice(2),
       url: URL.createObjectURL(file),
+      file,
     }))
     setPhotos((prev) => [...prev, ...newPhotos])
   }

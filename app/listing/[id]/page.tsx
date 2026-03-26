@@ -1,38 +1,71 @@
-import Link from 'next/link'
+'use client'
 
-// Mock data for a single listing
-const mockListing = {
-  id: '1',
-  title_az: 'Zara qırmızı palto',
-  title_ru: 'Красное пальто Zara',
-  description_az:
-    'Zara markasından qırmızı palto. Az geyilib, əla vəziyyətdədir. Ölçüsü M, lakin L-ə də uyğun gəlir.',
-  description_ru:
-    'Красное пальто Zara. Мало ношеное, в отличном состоянии. Размер M, подходит и на L.',
-  price: 45,
-  brand: 'Zara',
-  size: 'M',
-  condition: 'good' as const,
-  views: 142,
-  images: [] as string[],
-  seller: {
-    id: 'u1',
-    name: 'Aynur Həsənova',
-    avatar: '',
-    listings_count: 12,
-    joined: '2024',
-  },
+import { useEffect, useState } from 'react'
+import { useParams } from 'next/navigation'
+import Image from 'next/image'
+import Link from 'next/link'
+import { supabase } from '@/lib/supabase'
+import type { ListingRow } from '@/lib/supabase'
+
+type FullListing = ListingRow & {
+  users: {
+    id: string
+    full_name: string | null
+    email: string | null
+    avatar_url: string | null
+  } | null
 }
 
 const conditionMap = {
-  new: { label: 'Yeni', color: '#00E5CC' },
+  new:  { label: 'Yeni',  color: '#00E5CC' },
   good: { label: 'Yaxşı', color: '#FF9500' },
-  fair: { label: 'Orta', color: '#FF2D78' },
+  fair: { label: 'Orta',  color: '#FF2D78' },
 }
 
-export default function ListingPage({ params }: { params: { id: string } }) {
-  const listing = mockListing
-  const cond = conditionMap[listing.condition]
+export default function ListingPage() {
+  const params = useParams()
+  const id = params.id as string
+
+  const [listing, setListing] = useState<FullListing | null>(null)
+  const [activeImg, setActiveImg] = useState(0)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    supabase
+      .from('listings')
+      .select('*, users:seller_id(id, full_name, email, avatar_url)')
+      .eq('id', id)
+      .single()
+      .then(({ data }) => {
+        setListing(data as FullListing)
+        setLoading(false)
+      })
+  }, [id])
+
+  if (loading) {
+    return (
+      <main className="max-w-5xl mx-auto px-4 py-16 text-center">
+        <div className="text-gray-400 text-sm">Yüklənir...</div>
+      </main>
+    )
+  }
+
+  if (!listing) {
+    return (
+      <main className="max-w-5xl mx-auto px-4 py-16 text-center">
+        <div className="text-4xl mb-3">🔍</div>
+        <p className="text-gray-600 font-semibold mb-1">Elan tapılmadı</p>
+        <Link href="/" className="text-sm underline" style={{ color: '#FF2D78' }}>
+          Ana səhifəyə qayıt
+        </Link>
+      </main>
+    )
+  }
+
+  const cond = conditionMap[listing.condition] ?? conditionMap.good
+  const seller = listing.users
+  const sellerName = seller?.full_name || seller?.email?.split('@')[0] || 'Satıcı'
+  const hasImages = listing.images && listing.images.length > 0
 
   return (
     <main className="max-w-5xl mx-auto px-4 py-8">
@@ -41,23 +74,37 @@ export default function ListingPage({ params }: { params: { id: string } }) {
         <div className="flex flex-col gap-3">
           {/* Main image */}
           <div
-            className="w-full aspect-[3/4] rounded-2xl bg-gradient-to-br from-pink-100 to-yellow-100 flex items-center justify-center"
+            className="w-full aspect-[3/4] rounded-2xl overflow-hidden bg-gradient-to-br from-pink-100 to-yellow-100 flex items-center justify-center"
             style={{ border: '2px solid #1a1040' }}
           >
-            <span className="text-8xl">👗</span>
+            {hasImages ? (
+              <Image
+                src={listing.images[activeImg]}
+                alt={listing.title_az}
+                fill
+                className="object-cover rounded-2xl"
+                unoptimized
+              />
+            ) : (
+              <span className="text-8xl">👗</span>
+            )}
           </div>
+
           {/* Thumbnails */}
-          <div className="flex gap-2">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div
-                key={i}
-                className="w-16 h-16 rounded-xl bg-gradient-to-br from-pink-50 to-yellow-50 flex items-center justify-center cursor-pointer transition-all hover:scale-105"
-                style={{ border: i === 0 ? '2px solid #FF2D78' : '2px solid #ccc' }}
-              >
-                <span className="text-xl">👗</span>
-              </div>
-            ))}
-          </div>
+          {hasImages && listing.images.length > 1 && (
+            <div className="flex gap-2">
+              {listing.images.map((src, i) => (
+                <button
+                  key={i}
+                  onClick={() => setActiveImg(i)}
+                  className="relative w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 transition-all hover:scale-105"
+                  style={{ border: i === activeImg ? '2px solid #FF2D78' : '2px solid #ccc' }}
+                >
+                  <Image src={src} alt={`Foto ${i + 1}`} fill className="object-cover" unoptimized />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Info */}
@@ -78,20 +125,24 @@ export default function ListingPage({ params }: { params: { id: string } }) {
             </div>
           </div>
 
-          {/* Chips row */}
+          {/* Chips */}
           <div className="flex flex-wrap gap-2">
-            <span
-              className="px-3 py-1 rounded-full text-xs font-semibold"
-              style={{ border: '2px solid #1a1040', backgroundColor: 'white' }}
-            >
-              {listing.brand}
-            </span>
-            <span
-              className="px-3 py-1 rounded-full text-xs font-semibold"
-              style={{ border: '2px solid #1a1040', backgroundColor: 'white' }}
-            >
-              {listing.size}
-            </span>
+            {listing.brand && (
+              <span
+                className="px-3 py-1 rounded-full text-xs font-semibold"
+                style={{ border: '2px solid #1a1040', backgroundColor: 'white' }}
+              >
+                {listing.brand}
+              </span>
+            )}
+            {listing.size && (
+              <span
+                className="px-3 py-1 rounded-full text-xs font-semibold"
+                style={{ border: '2px solid #1a1040', backgroundColor: 'white' }}
+              >
+                {listing.size}
+              </span>
+            )}
             <span
               className="px-3 py-1 rounded-full text-xs font-semibold text-white"
               style={{ backgroundColor: cond.color, border: `2px solid ${cond.color}` }}
@@ -101,38 +152,39 @@ export default function ListingPage({ params }: { params: { id: string } }) {
           </div>
 
           {/* Description */}
-          <p className="text-sm text-gray-700 leading-relaxed">{listing.description_az}</p>
+          {listing.description_az && (
+            <p className="text-sm text-gray-700 leading-relaxed">{listing.description_az}</p>
+          )}
 
           {/* Views */}
           <p className="text-xs text-gray-400">👁 {listing.views} baxış</p>
 
           {/* Seller card */}
-          <div
-            className="flex items-center gap-3 p-4 rounded-2xl"
-            style={{ border: '2px solid #1a1040', backgroundColor: 'white' }}
-          >
+          {seller && (
             <div
-              className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-yellow-400 flex items-center justify-center text-lg font-bold text-white flex-shrink-0"
-              style={{ border: '2px solid #1a1040' }}
+              className="flex items-center gap-3 p-4 rounded-2xl"
+              style={{ border: '2px solid #1a1040', backgroundColor: 'white' }}
             >
-              {listing.seller.name[0]}
+              <div
+                className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-yellow-400 flex items-center justify-center text-lg font-bold text-white flex-shrink-0"
+                style={{ border: '2px solid #1a1040' }}
+              >
+                {sellerName[0].toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm truncate" style={{ color: '#1a1040' }}>
+                  {sellerName}
+                </p>
+              </div>
+              <Link
+                href={`/profile/${seller.id}`}
+                className="text-xs font-semibold px-3 py-1.5 rounded-full transition-all hover:bg-gray-50 flex-shrink-0"
+                style={{ border: '2px solid #1a1040', color: '#1a1040' }}
+              >
+                Profil
+              </Link>
             </div>
-            <div className="flex-1">
-              <p className="font-semibold text-sm" style={{ color: '#1a1040' }}>
-                {listing.seller.name}
-              </p>
-              <p className="text-xs text-gray-500">
-                {listing.seller.listings_count} elan · {listing.seller.joined}-dən
-              </p>
-            </div>
-            <Link
-              href={`/profile/${listing.seller.id}`}
-              className="text-xs font-semibold px-3 py-1.5 rounded-full transition-all hover:bg-gray-50"
-              style={{ border: '2px solid #1a1040', color: '#1a1040' }}
-            >
-              Profil
-            </Link>
-          </div>
+          )}
 
           {/* CTA buttons */}
           <div className="flex flex-col gap-3">
