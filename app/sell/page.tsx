@@ -88,12 +88,15 @@ type PhotoEntry = { id: string; url: string }
 export default function SellPage() {
   const router = useRouter()
   const [authChecked, setAuthChecked] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
   const [step, setStep] = useState(0)
+  const [publishing, setPublishing] = useState(false)
+  const [publishError, setPublishError] = useState<string | null>(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) router.replace('/auth')
-      else setAuthChecked(true)
+      else { setUserId(data.user.id); setAuthChecked(true) }
     })
   }, [router])
 
@@ -116,6 +119,44 @@ export default function SellPage() {
   })
 
   const update = (field: string, val: string) => setForm((f) => ({ ...f, [field]: val }))
+
+  async function publishListing() {
+    // Validate required fields
+    if (!userId) { setPublishError('İstifadəçi tapılmadı. Yenidən daxil olun.'); return }
+    if (!form.title_az.trim()) { setPublishError('Başlıq tələb olunur (Azərbaycanca).'); return }
+    if (!form.price || parseFloat(form.price) <= 0) { setPublishError('Düzgün qiymət daxil edin.'); return }
+    if (!form.condition) { setPublishError('Vəziyyət seçilməlidir.'); return }
+
+    setPublishing(true)
+    setPublishError(null)
+
+    const payload = {
+      seller_id: userId,
+      title_az: form.title_az.trim(),
+      title_ru: form.title_ru.trim() || form.title_az.trim(),
+      description_az: form.description_az.trim() || null,
+      price: parseFloat(form.price),
+      category: form.category || null,
+      size: form.size || null,
+      brand: form.brand.trim() || null,
+      condition: form.condition as 'new' | 'good' | 'fair',
+      images: [] as string[],
+      status: 'active',
+    }
+
+    console.log('[publish] payload:', payload)
+
+    const { data, error } = await supabase.from('listings').insert(payload).select().single()
+
+    console.log('[publish] response:', { data, error })
+
+    setPublishing(false)
+    if (error) {
+      setPublishError(`Xəta: ${error.message} (${error.code})`)
+      return
+    }
+    router.push('/')
+  }
 
   if (!authChecked) return null
 
@@ -485,6 +526,14 @@ export default function SellPage() {
           <p className="text-sm text-gray-500 max-w-xs">
             Elanını yayımla, alıcıların sənə çatacaq!
           </p>
+          {publishError && (
+            <div
+              className="w-full px-4 py-3 rounded-xl text-sm"
+              style={{ backgroundColor: '#FFF0F5', border: '2px solid #FF2D78', color: '#FF2D78' }}
+            >
+              {publishError}
+            </div>
+          )}
           {photos.length > 0 && (
             <div className="flex gap-2 justify-center">
               {photos.slice(0, 3).map((p, i) => (
@@ -507,10 +556,12 @@ export default function SellPage() {
             </div>
           )}
           <button
-            className="px-8 py-3 rounded-full font-bold text-white transition-transform hover:scale-105"
+            onClick={publishListing}
+            disabled={publishing}
+            className="px-8 py-3 rounded-full font-bold text-white transition-transform hover:scale-105 disabled:opacity-60 disabled:cursor-not-allowed"
             style={{ backgroundColor: '#FF2D78', border: '2px solid #1a1040' }}
           >
-            Yayımla
+            {publishing ? 'Yüklənir...' : 'Yayımla'}
           </button>
         </div>
       )}

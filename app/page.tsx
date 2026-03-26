@@ -1,77 +1,54 @@
+'use client'
+
 import Image from 'next/image'
+import { useEffect, useState } from 'react'
 import FilterBar from '@/components/FilterBar'
 import ListingCard, { MockListing } from '@/components/ListingCard'
+import { supabase } from '@/lib/supabase'
+import type { ListingRow } from '@/lib/supabase'
 
-const mockListings: MockListing[] = [
-  {
-    id: '1',
-    title_az: 'Zara qırmızı palto',
-    title_ru: 'Красное пальто Zara',
-    price: 45,
-    brand: 'Zara',
-    condition: 'good',
-    images: [],
-    seller: { name: 'Aynur', avatar: '' },
-    rotation: -1,
-  },
-  {
-    id: '2',
-    title_az: 'Nike ağ krossovka',
-    title_ru: 'Белые кроссовки Nike',
-    price: 70,
-    brand: 'Nike',
-    condition: 'new',
-    images: [],
-    seller: { name: 'Kamran', avatar: '' },
-    rotation: 1,
-  },
-  {
-    id: '3',
-    title_az: 'H&M gödəkçə',
-    title_ru: 'Куртка H&M',
-    price: 30,
-    brand: 'H&M',
-    condition: 'fair',
-    images: [],
-    seller: { name: 'Günel', avatar: '' },
-    rotation: -1,
-  },
-  {
-    id: '4',
-    title_az: 'Mango köynək',
-    title_ru: 'Рубашка Mango',
-    price: 22,
-    brand: 'Mango',
-    condition: 'good',
-    images: [],
-    seller: { name: 'Leyla', avatar: '' },
-    rotation: 0,
-  },
-  {
-    id: '5',
-    title_az: 'Adidas idman şalvarı',
-    title_ru: 'Спортивные штаны Adidas',
-    price: 35,
-    brand: 'Adidas',
-    condition: 'new',
-    images: [],
-    seller: { name: 'Tural', avatar: '' },
-    rotation: 1,
-  },
-  {
-    id: '6',
-    title_az: 'Pull&Bear çanta',
-    title_ru: 'Сумка Pull&Bear',
-    price: 28,
-    brand: 'Pull&Bear',
-    condition: 'good',
-    images: [],
-    seller: { name: 'Nigar', avatar: '' },
-    rotation: -1,
-  },
-]
+const ROTATIONS: (-1 | 0 | 1)[] = [-1, 1, -1, 0, 1, -1, 0, 1]
+
+function toCard(l: ListingRow, sellerName: string, index: number): MockListing {
+  return {
+    id: l.id,
+    title_az: l.title_az,
+    title_ru: l.title_ru,
+    price: l.price,
+    brand: l.brand ?? '',
+    condition: l.condition,
+    images: l.images,
+    seller: { name: sellerName, avatar: '' },
+    rotation: ROTATIONS[index % ROTATIONS.length],
+  }
+}
 
 export default function HomePage() {
+  const [listings, setListings] = useState<MockListing[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function fetchListings() {
+      const { data } = await supabase
+        .from('listings')
+        .select('*, users:seller_id(full_name, email)')
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(40)
+
+      if (data) {
+        const cards = data.map((row: ListingRow & { users?: { full_name: string | null; email: string | null } | null }, i: number) => {
+          const u = row.users
+          const name = u?.full_name || u?.email?.split('@')[0] || 'Satıcı'
+          return toCard(row, name, i)
+        })
+        setListings(cards)
+      }
+      setLoading(false)
+    }
+    fetchListings()
+  }, [])
+
   return (
     <main>
       {/* Hero Section */}
@@ -140,17 +117,40 @@ export default function HomePage() {
           >
             Son Elanlar
           </h2>
-          <span className="text-sm text-gray-400">{mockListings.length} elan</span>
+          <span className="text-sm text-gray-400">
+            {loading ? '...' : `${listings.length} elan`}
+          </span>
         </div>
 
-        {/* Masonry-style grid */}
-        <div className="columns-2 sm:columns-3 lg:columns-4 xl:columns-5 gap-4 space-y-4">
-          {mockListings.map((listing) => (
-            <div key={listing.id} className="break-inside-avoid">
-              <ListingCard listing={listing} />
-            </div>
-          ))}
-        </div>
+        {loading ? (
+          /* Skeleton */
+          <div className="columns-2 sm:columns-3 lg:columns-4 xl:columns-5 gap-4 space-y-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div
+                key={i}
+                className="break-inside-avoid rounded-2xl bg-gray-200 animate-pulse"
+                style={{ height: i % 2 === 0 ? 260 : 220, border: '2px solid #e5e7eb' }}
+              />
+            ))}
+          </div>
+        ) : listings.length === 0 ? (
+          <div
+            className="text-center py-20 rounded-2xl"
+            style={{ border: '2px dashed #ccc' }}
+          >
+            <div className="text-4xl mb-3">🛍️</div>
+            <p className="text-gray-500 text-sm">Hələ heç bir elan yoxdur.</p>
+            <p className="text-gray-400 text-xs mt-1">İlk elanı sən ver!</p>
+          </div>
+        ) : (
+          <div className="columns-2 sm:columns-3 lg:columns-4 xl:columns-5 gap-4 space-y-4">
+            {listings.map((listing) => (
+              <div key={listing.id} className="break-inside-avoid">
+                <ListingCard listing={listing} />
+              </div>
+            ))}
+          </div>
+        )}
       </section>
     </main>
   )
