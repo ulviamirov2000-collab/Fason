@@ -67,3 +67,4 @@ export type Database = {
 
 export type UserRow = Database['public']['Tables']['users']['Row']
 export type ListingRow = Database['public']['Tables']['listings']['Row']
+export type MessageRow = Database['public']['Tables']['messages']['Row']

@@ -13,6 +13,7 @@ export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [user, setUser] = useState<User | null>(null)
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -26,6 +27,40 @@ export default function Navbar() {
 
     return () => subscription.unsubscribe()
   }, [])
+
+  // Unread message count
+  useEffect(() => {
+    if (!user) { setUnreadCount(0); return }
+
+    function fetchCount() {
+      supabase
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('receiver_id', user!.id)
+        .eq('is_read', false)
+        .then(({ count }) => setUnreadCount(count ?? 0))
+    }
+
+    fetchCount()
+
+    const channel = supabase
+      .channel(`navbar-unread:${user.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `receiver_id=eq.${user.id}`,
+      }, () => { setUnreadCount((n) => n + 1) })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'messages',
+        filter: `receiver_id=eq.${user.id}`,
+      }, () => { fetchCount() })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [user])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -104,7 +139,27 @@ export default function Navbar() {
 
           {/* Auth area */}
           {user ? (
-            /* Logged-in: avatar + dropdown */
+            <>
+            {/* Messages icon with unread badge */}
+            <Link
+              href="/messages"
+              className="relative flex items-center justify-center w-9 h-9 rounded-full transition-colors hover:bg-white/10"
+              aria-label="Mesajlar"
+            >
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              {unreadCount > 0 && (
+                <span
+                  className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full flex items-center justify-center text-xs font-bold text-white px-1"
+                  style={{ backgroundColor: '#FF2D78', border: '1.5px solid #1a1040' }}
+                >
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </Link>
+
+            {/* Avatar + dropdown */}
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -151,6 +206,7 @@ export default function Navbar() {
                 </div>
               )}
             </div>
+            </>
           ) : (
             /* Not logged in: Giriş button */
             <Link

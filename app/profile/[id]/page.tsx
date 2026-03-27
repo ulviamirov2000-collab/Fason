@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
 import type { UserRow, ListingRow } from '@/lib/supabase'
+import MessagesUI from '@/components/MessagesUI'
 
 const statusConfig = {
   active:   { label: 'Aktiv',    bg: '#E8FFF8', color: '#00856F', border: '#00E5CC' },
@@ -127,6 +128,7 @@ export default function ProfilePage() {
   }
 
   const isOwner = currentUserId === id
+  const [activeTab, setActiveTab] = useState<'listings' | 'messages'>('listings')
 
   if (loading) {
     return (
@@ -254,25 +256,52 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Listings section */}
+      {/* Tabs — owner sees Elanlarım + Mesajlar, others see just Aktiv elanlar */}
       <div>
-        <div className="flex items-center justify-between mb-5">
-          <h2
-            className="text-lg font-bold"
-            style={{ fontFamily: 'var(--font-unbounded)', color: '#1a1040' }}
-          >
-            {isOwner ? 'Elanlarım' : 'Aktiv elanlar'}
-          </h2>
-          {isOwner && (
-            <Link
-              href="/sell"
-              className="px-4 py-2 rounded-full text-xs font-bold text-white transition-transform hover:scale-105"
-              style={{ backgroundColor: '#FF2D78' }}
-            >
-              + Yeni elan
-            </Link>
-          )}
-        </div>
+        {isOwner ? (
+          <div className="flex items-center gap-2 mb-5">
+            {(['listings', 'messages'] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className="px-4 py-2 rounded-full text-sm font-bold transition-all"
+                style={
+                  activeTab === tab
+                    ? { backgroundColor: '#FF2D78', color: 'white', border: '2px solid #1a1040' }
+                    : { backgroundColor: 'white', color: '#1a1040', border: '2px solid #ccc' }
+                }
+              >
+                {tab === 'listings' ? 'Elanlarım' : '💬 Mesajlar'}
+              </button>
+            ))}
+            {activeTab === 'listings' && (
+              <Link
+                href="/sell"
+                className="ml-auto px-4 py-2 rounded-full text-xs font-bold text-white transition-transform hover:scale-105"
+                style={{ backgroundColor: '#FF2D78' }}
+              >
+                + Yeni elan
+              </Link>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-lg font-bold" style={{ fontFamily: 'var(--font-unbounded)', color: '#1a1040' }}>
+              Aktiv elanlar
+            </h2>
+          </div>
+        )}
+
+        {/* Messages tab (owner only) */}
+        {isOwner && activeTab === 'messages' && currentUserId && (
+          <div style={{ height: 'calc(100vh - 340px)', minHeight: 400 }}>
+            <MessagesUI currentUserId={currentUserId} />
+          </div>
+        )}
+
+        {/* Listings content */}
+        {(!isOwner || activeTab === 'listings') && (
+        <div>
 
         {listings.length === 0 ? (
           <div
@@ -408,6 +437,8 @@ export default function ProfilePage() {
               )
             })}
           </div>
+        )}
+        </div>
         )}
       </div>
     </main>

@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import type { ListingRow } from '@/lib/supabase'
+import ChatDrawer from '@/components/ChatDrawer'
 
 type FullListing = ListingRow & {
   users: {
@@ -24,13 +25,18 @@ const conditionMap = {
 
 export default function ListingPage() {
   const params = useParams()
+  const router = useRouter()
   const id = params.id as string
 
   const [listing, setListing] = useState<FullListing | null>(null)
   const [activeImg, setActiveImg] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [chatOpen, setChatOpen] = useState(false)
 
   useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null))
+
     supabase
       .from('listings')
       .select('*, users:seller_id(id, full_name, email, avatar_url)')
@@ -68,6 +74,7 @@ export default function ListingPage() {
   const hasImages = listing.images && listing.images.length > 0
 
   return (
+    <>
     <main className="max-w-5xl mx-auto px-4 py-8">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Image Gallery */}
@@ -188,13 +195,19 @@ export default function ListingPage() {
 
           {/* CTA buttons */}
           <div className="flex flex-col gap-3">
-            <Link
-              href="/messages"
-              className="w-full py-3.5 rounded-2xl font-bold text-white text-center transition-transform hover:scale-[1.02] active:scale-[0.98]"
-              style={{ backgroundColor: '#FF2D78', border: '2px solid #1a1040', boxShadow: '3px 3px 0 #1a1040' }}
-            >
-              💬 Satıcıya yaz
-            </Link>
+            {/* Only show chat button if viewer is not the seller */}
+            {seller && currentUserId !== seller.id && (
+              <button
+                onClick={() => {
+                  if (!currentUserId) { router.push('/auth'); return }
+                  setChatOpen(true)
+                }}
+                className="w-full py-3.5 rounded-2xl font-bold text-white text-center transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                style={{ backgroundColor: '#FF2D78', border: '2px solid #1a1040', boxShadow: '3px 3px 0 #1a1040' }}
+              >
+                💬 Satıcıya yaz
+              </button>
+            )}
             <button
               className="w-full py-3.5 rounded-2xl font-bold text-center transition-all hover:bg-gray-50"
               style={{ border: '2px solid #1a1040', color: '#1a1040', boxShadow: '3px 3px 0 #1a1040' }}
@@ -205,5 +218,19 @@ export default function ListingPage() {
         </div>
       </div>
     </main>
+
+    {chatOpen && seller && currentUserId && (
+      <ChatDrawer
+        listingId={listing.id}
+        sellerId={seller.id}
+        sellerName={sellerName}
+        listingTitle={listing.title_az}
+        listingPrice={listing.price}
+        listingImage={hasImages ? listing.images[0] : undefined}
+        currentUserId={currentUserId}
+        onClose={() => setChatOpen(false)}
+      />
+    )}
+  </>
   )
 }
