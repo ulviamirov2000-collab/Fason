@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Image from 'next/image'
+import CameraCapture, { type PhotoEntry } from '@/components/CameraCapture'
 
 const steps = ['Foto', 'Məlumat', 'Qiymət', 'Yayımla']
 
@@ -14,76 +15,6 @@ const conditions = [
   { value: 'good', label: 'Yaxşı', color: '#FF9500', desc: 'Az istifadə edilib, əla vəziyyətdə' },
   { value: 'fair', label: 'Orta', color: '#FF2D78', desc: 'İstifadə izləri var amma sağlamdır' },
 ]
-
-type Guide = {
-  id: string
-  icon: string
-  label: string
-  shape: React.ReactNode
-}
-
-const guides: Guide[] = [
-  {
-    id: 'pants',
-    icon: '👖',
-    label: 'Şalvar',
-    shape: (
-      <svg viewBox="0 0 120 180" fill="none" stroke="white" strokeWidth="3" className="w-full h-full">
-        <path d="M25,10 L95,10 L105,90 L85,170 L65,170 L60,110 L55,170 L35,170 L15,90 Z"
-          strokeLinejoin="round" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
-    id: 'shirt',
-    icon: '👔',
-    label: 'Köynək',
-    shape: (
-      <svg viewBox="0 0 140 140" fill="none" stroke="white" strokeWidth="3" className="w-full h-full">
-        <path d="M50,10 L10,40 L28,55 L28,130 L112,130 L112,55 L130,40 L90,10 L80,30 Q70,38 60,30 Z"
-          strokeLinejoin="round" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
-    id: 'dress',
-    icon: '👗',
-    label: 'Paltar',
-    shape: (
-      <svg viewBox="0 0 120 180" fill="none" stroke="white" strokeWidth="3" className="w-full h-full">
-        <path d="M45,10 L75,10 L85,55 L110,170 L10,170 L35,55 Z"
-          strokeLinejoin="round" strokeLinecap="round" />
-        <line x1="45" y1="10" x2="35" y2="30" strokeLinecap="round" />
-        <line x1="75" y1="10" x2="85" y2="30" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
-    id: 'bag',
-    icon: '👜',
-    label: 'Çanta',
-    shape: (
-      <svg viewBox="0 0 140 140" fill="none" stroke="white" strokeWidth="3" className="w-full h-full">
-        <path d="M40,55 Q40,30 70,30 Q100,30 100,55 L115,55 Q125,55 125,65 L125,120 Q125,130 115,130 L25,130 Q15,130 15,120 L15,65 Q15,55 25,55 Z"
-          strokeLinejoin="round" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
-    id: 'shoe',
-    icon: '👟',
-    label: 'Ayaqqabı',
-    shape: (
-      <svg viewBox="0 0 200 120" fill="none" stroke="white" strokeWidth="3" className="w-full h-full">
-        <path d="M15,85 Q10,55 60,45 L130,35 Q170,30 185,55 Q200,75 180,95 Q160,108 100,108 L40,108 Q15,108 15,85 Z"
-          strokeLinejoin="round" strokeLinecap="round" />
-        <path d="M60,45 L65,85" strokeLinecap="round" strokeDasharray="4 4" />
-      </svg>
-    ),
-  },
-]
-
-type PhotoEntry = { id: string; url: string; file: File }
 
 export default function SellPage() {
   const router = useRouter()
@@ -100,12 +31,8 @@ export default function SellPage() {
     })
   }, [router])
 
-  // Photo step state
+  // Photos managed by CameraCapture, synced here for publish step
   const [photos, setPhotos] = useState<PhotoEntry[]>([])
-  const [selectedGuide, setSelectedGuide] = useState<string | null>(null)
-
-  const cameraRef = useRef<HTMLInputElement>(null)
-  const galleryRef = useRef<HTMLInputElement>(null)
 
   const [form, setForm] = useState({
     title_az: '',
@@ -130,24 +57,12 @@ export default function SellPage() {
     setPublishing(true)
     setPublishError(null)
 
-    // Upload photos to Supabase Storage
-    const uploadedUrls: string[] = []
-    for (const photo of photos) {
-      const ext = photo.file.name.split('.').pop()?.toLowerCase() || 'jpg'
-      const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-      const { error: uploadError } = await supabase.storage
-        .from('listing-images')
-        .upload(path, photo.file, { contentType: photo.file.type, upsert: false })
-      if (uploadError) {
-        console.warn('[upload] storage error:', uploadError.message)
-        continue
-      }
-      const { data: { publicUrl } } = supabase.storage
-        .from('listing-images')
-        .getPublicUrl(path)
-      uploadedUrls.push(publicUrl)
-      console.log('[upload] uploaded:', publicUrl)
-    }
+    // Collect already-uploaded URLs; skip any that failed or are still uploading
+    const uploadedUrls = photos
+      .filter((p) => p.storageUrl !== null)
+      .map((p) => p.storageUrl as string)
+
+    console.log('[publish] using uploaded URLs:', uploadedUrls)
 
     const payload = {
       seller_id: userId,
@@ -178,24 +93,6 @@ export default function SellPage() {
   }
 
   if (!authChecked) return null
-
-  function handleFiles(files: FileList | null) {
-    if (!files) return
-    const remaining = 5 - photos.length
-    const toAdd = Array.from(files).slice(0, remaining)
-    const newPhotos: PhotoEntry[] = toAdd.map((file) => ({
-      id: Math.random().toString(36).slice(2),
-      url: URL.createObjectURL(file),
-      file,
-    }))
-    setPhotos((prev) => [...prev, ...newPhotos])
-  }
-
-  function removePhoto(id: string) {
-    setPhotos((prev) => prev.filter((p) => p.id !== id))
-  }
-
-  const activeGuide = guides.find((g) => g.id === selectedGuide)
 
   const inputClass = 'w-full px-4 py-3 rounded-xl text-sm outline-none'
   const inputStyle = { border: '2px solid #1a1040', backgroundColor: 'white' }
@@ -237,173 +134,7 @@ export default function SellPage() {
 
       {/* ─── Step 0 — Photos ─────────────────────────────────────────── */}
       {step === 0 && (
-        <div className="flex flex-col gap-6">
-          <h2 className="text-lg font-bold" style={{ color: '#1a1040' }}>Foto əlavə et</h2>
-
-          {/* Guide selector */}
-          <div>
-            <p className="text-sm font-semibold mb-3" style={{ color: '#1a1040' }}>
-              Məhsul növünü seç <span className="text-gray-400 font-normal">(isteğe bağlı)</span>
-            </p>
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-              {guides.map((g) => (
-                <button
-                  key={g.id}
-                  onClick={() => setSelectedGuide(selectedGuide === g.id ? null : g.id)}
-                  className="flex-shrink-0 flex flex-col items-center gap-1 px-3 py-2 rounded-2xl transition-all"
-                  style={
-                    selectedGuide === g.id
-                      ? { backgroundColor: '#1a1040', border: '2px solid #FF2D78', minWidth: 64 }
-                      : { backgroundColor: 'white', border: '2px solid #e5e7eb', minWidth: 64 }
-                  }
-                >
-                  <span className="text-2xl">{g.icon}</span>
-                  <span
-                    className="text-xs font-medium"
-                    style={{ color: selectedGuide === g.id ? 'white' : '#1a1040' }}
-                  >
-                    {g.label}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Guide preview + upload area */}
-          <div
-            className="relative w-full rounded-3xl overflow-hidden flex flex-col items-center justify-center"
-            style={{
-              backgroundColor: '#1a1040',
-              border: '2px solid #1a1040',
-              minHeight: 260,
-            }}
-          >
-            {/* Shape overlay */}
-            {activeGuide && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-                <div className="opacity-30 w-32 h-44">
-                  {activeGuide.shape}
-                </div>
-              </div>
-            )}
-
-            {/* Upload prompt */}
-            <div className="relative z-10 flex flex-col items-center gap-4 py-8 px-4">
-              <p className="text-white/60 text-xs tracking-wide uppercase">
-                {activeGuide ? `${activeGuide.icon} ${activeGuide.label} çəkmək üçün` : 'Foto əlavə et'}
-              </p>
-
-              {/* Hidden inputs */}
-              <input
-                ref={cameraRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={(e) => handleFiles(e.target.files)}
-              />
-              <input
-                ref={galleryRef}
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={(e) => handleFiles(e.target.files)}
-              />
-
-              {/* Big touch-friendly buttons */}
-              <div className="flex gap-3">
-                <button
-                  onClick={() => cameraRef.current?.click()}
-                  disabled={photos.length >= 5}
-                  className="flex flex-col items-center gap-2 px-5 py-4 rounded-2xl font-semibold text-black transition-all hover:scale-105 active:scale-95 disabled:opacity-40"
-                  style={{ backgroundColor: '#FFE600', border: '2px solid #FFE600', minWidth: 100, minHeight: 80 }}
-                >
-                  <span className="text-2xl">📷</span>
-                  <span className="text-xs font-bold">Kamera</span>
-                </button>
-                <button
-                  onClick={() => galleryRef.current?.click()}
-                  disabled={photos.length >= 5}
-                  className="flex flex-col items-center gap-2 px-5 py-4 rounded-2xl font-semibold text-white transition-all hover:scale-105 active:scale-95 disabled:opacity-40"
-                  style={{ backgroundColor: '#FF2D78', border: '2px solid #FF2D78', minWidth: 100, minHeight: 80 }}
-                >
-                  <span className="text-2xl">🖼</span>
-                  <span className="text-xs font-bold">Qalereyadan seç</span>
-                </button>
-              </div>
-
-              <p className="text-white/40 text-xs">
-                {photos.length}/5 foto • Maks 5MB
-              </p>
-            </div>
-          </div>
-
-          {/* Photo previews */}
-          {photos.length > 0 && (
-            <div>
-              <p className="text-sm font-semibold mb-3" style={{ color: '#1a1040' }}>
-                Yüklənmiş fotolar
-              </p>
-              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-                {photos.map((photo, index) => (
-                  <div
-                    key={photo.id}
-                    className="relative flex-shrink-0 rounded-2xl overflow-hidden"
-                    style={{
-                      width: 110,
-                      height: 140,
-                      border: index === 0 ? '2.5px solid #FF2D78' : '2px solid #1a1040',
-                    }}
-                  >
-                    <Image
-                      src={photo.url}
-                      alt={`Foto ${index + 1}`}
-                      fill
-                      className="object-cover"
-                      unoptimized
-                    />
-                    {/* Main photo badge */}
-                    {index === 0 && (
-                      <div
-                        className="absolute bottom-0 left-0 right-0 text-center py-1 text-xs font-bold"
-                        style={{ backgroundColor: '#FF2D78', color: 'white' }}
-                      >
-                        Əsas foto
-                      </div>
-                    )}
-                    {/* Remove button */}
-                    <button
-                      onClick={() => removePhoto(photo.id)}
-                      className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold transition-transform hover:scale-110"
-                      style={{ backgroundColor: 'rgba(26,16,64,0.85)' }}
-                      aria-label="Sil"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-
-                {/* Add more slot */}
-                {photos.length < 5 && (
-                  <button
-                    onClick={() => galleryRef.current?.click()}
-                    className="flex-shrink-0 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all hover:bg-gray-100"
-                    style={{
-                      width: 110,
-                      height: 140,
-                      border: '2px dashed #ccc',
-                      backgroundColor: '#F9F9F9',
-                    }}
-                  >
-                    <span className="text-xl text-gray-400">+</span>
-                    <span className="text-xs text-gray-400">Əlavə et</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+        <CameraCapture userId={userId!} onChange={setPhotos} maxPhotos={5} />
       )}
 
       {/* ─── Step 1 — Details ───────────────────────────────────────── */}
@@ -562,7 +293,7 @@ export default function SellPage() {
                   className="relative w-16 h-20 rounded-xl overflow-hidden"
                   style={{ border: '2px solid #1a1040' }}
                 >
-                  <Image src={p.url} alt={`Foto ${i + 1}`} fill className="object-cover" unoptimized />
+                  <Image src={p.previewUrl} alt={`Foto ${i + 1}`} fill className="object-cover" unoptimized />
                 </div>
               ))}
               {photos.length > 3 && (
@@ -575,13 +306,16 @@ export default function SellPage() {
               )}
             </div>
           )}
+          {photos.some((p) => p.uploading) && (
+            <p className="text-xs text-gray-400">⏳ Fotolar yüklənir, gözləyin...</p>
+          )}
           <button
             onClick={publishListing}
-            disabled={publishing}
+            disabled={publishing || photos.some((p) => p.uploading)}
             className="px-8 py-3 rounded-full font-bold text-white transition-transform hover:scale-105 disabled:opacity-60 disabled:cursor-not-allowed"
             style={{ backgroundColor: '#FF2D78', border: '2px solid #1a1040' }}
           >
-            {publishing ? 'Yüklənir...' : 'Yayımla'}
+            {publishing ? 'Yayımlanır...' : 'Yayımla'}
           </button>
         </div>
       )}
