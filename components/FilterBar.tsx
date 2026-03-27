@@ -5,27 +5,40 @@ import { CATEGORIES, SUBCATEGORIES, FILTER_SIZES_BY_CATEGORY, SIZES_BY_SUBCATEGO
 const CONDITIONS = ['Hamısı', 'Yeni', 'Yaxşı', 'Orta']
 
 const SORT_OPTIONS = [
-  { key: 'newest', label: 'Ən son' },
-  { key: 'price_asc', label: 'Ucuzdan bahaya' },
+  { key: 'newest',     label: 'Ən son' },
+  { key: 'price_asc',  label: 'Ucuzdan bahaya' },
   { key: 'price_desc', label: 'Bahadan ucuza' },
-  { key: 'views', label: 'Ən çox baxılan' },
+  { key: 'views',      label: 'Ən çox baxılan' },
 ]
 
 type Props = {
-  category: string | null
+  category:    string | null
   subcategory: string | null
-  size: string | null
-  condition: number
-  sort: string
-  onCategoryChange: (cat: string | null) => void
-  onSubcategoryChange: (sub: string | null) => void
-  onSizeChange: (size: string | null) => void
-  onConditionChange: (cond: number) => void
-  onSortChange: (sort: string) => void
+  size:        string | null
+  condition:   number
+  sort:        string
+  onCategoryChange:    (cat:  string | null) => void
+  onSubcategoryChange: (sub:  string | null) => void
+  onSizeChange:        (size: string | null) => void
+  onConditionChange:   (cond: number) => void
+  onSortChange:        (sort: string) => void
   lang?: 'AZ' | 'RU'
 }
 
-const chip = 'flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer border-2 whitespace-nowrap'
+// Base chip — shared by all chip buttons
+const chipBase =
+  'flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer border-2 whitespace-nowrap'
+
+// Inactive chip — uses className only so Tailwind hover works
+const chipInactive =
+  `${chipBase} bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:border-gray-400`
+
+// Active styles per row (returned as style objects, override the className bg/border/color)
+const activeCategory   = { backgroundColor: '#FF2D78', borderColor: '#FF2D78',  color: 'white'    }
+const activeSubcat     = { backgroundColor: '#1a1040', borderColor: '#1a1040',  color: 'white'    }
+const activeSize       = { backgroundColor: '#FFE600', borderColor: '#1a1040',  color: '#1a1040'  }
+const activeCondition  = { backgroundColor: '#00E5CC', borderColor: '#1a1040',  color: '#1a1040'  }
+const activeSort       = { backgroundColor: '#FF2D78', borderColor: '#FF2D78',  color: 'white'    }
 
 export default function FilterBar({
   category, subcategory, size, condition, sort,
@@ -47,16 +60,12 @@ export default function FilterBar({
     >
       <div className="max-w-7xl mx-auto flex flex-col gap-2">
 
-        {/* ── Row 1: Categories ── */}
+        {/* ── Row 1: Main categories ── */}
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
           <button
             onClick={() => onCategoryChange(null)}
-            className={chip}
-            style={
-              !category
-                ? { backgroundColor: '#FF2D78', borderColor: '#FF2D78', color: 'white' }
-                : { backgroundColor: 'white', color: '#555', borderColor: '#ddd' }
-            }
+            className={chipInactive}
+            style={!category ? activeCategory : {}}
           >
             Hamısı
           </button>
@@ -64,29 +73,22 @@ export default function FilterBar({
             <button
               key={cat}
               onClick={() => onCategoryChange(category === cat ? null : cat)}
-              className={chip}
-              style={
-                category === cat
-                  ? { backgroundColor: '#FF2D78', borderColor: '#FF2D78', color: 'white' }
-                  : { backgroundColor: 'white', color: '#555', borderColor: '#ddd' }
-              }
+              className={chipInactive}
+              style={category === cat ? activeCategory : {}}
             >
               {cat}
             </button>
           ))}
         </div>
 
-        {/* ── Row 2: Subcategories (when category selected) ── */}
+        {/* ── Row 2: Subcategories — only when a specific category is active ── */}
         {category && subcategoryList.length > 0 && (
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            {/* "Hamısı" clears subcategory but keeps category */}
             <button
               onClick={() => onSubcategoryChange(null)}
-              className={chip}
-              style={
-                !subcategory
-                  ? { backgroundColor: '#1a1040', borderColor: '#1a1040', color: 'white' }
-                  : { backgroundColor: 'white', color: '#555', borderColor: '#ddd' }
-              }
+              className={chipInactive}
+              style={!subcategory ? activeSubcat : {}}
             >
               Hamısı
             </button>
@@ -94,12 +96,8 @@ export default function FilterBar({
               <button
                 key={sub}
                 onClick={() => onSubcategoryChange(subcategory === sub ? null : sub)}
-                className={chip}
-                style={
-                  subcategory === sub
-                    ? { backgroundColor: '#1a1040', borderColor: '#1a1040', color: 'white' }
-                    : { backgroundColor: 'white', color: '#555', borderColor: '#ddd' }
-                }
+                className={chipInactive}
+                style={subcategory === sub ? activeSubcat : {}}
               >
                 {sub}
               </button>
@@ -107,18 +105,14 @@ export default function FilterBar({
           </div>
         )}
 
-        {/* ── Row 3: Sizes + Condition + Price ── */}
+        {/* ── Row 3: Sizes + Condition ── */}
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide items-center">
           {sizes.map((s) => (
             <button
               key={s}
               onClick={() => onSizeChange(size === s ? null : s)}
-              className={chip}
-              style={
-                size === s
-                  ? { backgroundColor: '#FFE600', borderColor: '#1a1040', color: '#1a1040' }
-                  : { backgroundColor: 'white', color: '#555', borderColor: '#ddd' }
-              }
+              className={chipInactive}
+              style={size === s ? activeSize : {}}
             >
               {s}
             </button>
@@ -130,12 +124,8 @@ export default function FilterBar({
             <button
               key={cond}
               onClick={() => onConditionChange(i)}
-              className={chip}
-              style={
-                condition === i
-                  ? { backgroundColor: '#00E5CC', borderColor: '#1a1040', color: '#1a1040' }
-                  : { backgroundColor: 'white', color: '#555', borderColor: '#ddd' }
-              }
+              className={chipInactive}
+              style={condition === i ? activeCondition : {}}
             >
               {cond}
             </button>
@@ -151,17 +141,14 @@ export default function FilterBar({
             <button
               key={opt.key}
               onClick={() => onSortChange(opt.key)}
-              className={chip}
-              style={
-                sort === opt.key
-                  ? { backgroundColor: '#FF2D78', borderColor: '#FF2D78', color: 'white' }
-                  : { backgroundColor: 'white', color: '#555', borderColor: '#ddd' }
-              }
+              className={chipInactive}
+              style={sort === opt.key ? activeSort : {}}
             >
               {opt.label}
             </button>
           ))}
         </div>
+
       </div>
     </div>
   )
