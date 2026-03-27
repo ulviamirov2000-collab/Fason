@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
 import type { MessageRow } from '@/lib/supabase'
+import { sanitize } from '@/lib/sanitize'
 
 type Props = {
   listingId: string
@@ -28,6 +29,8 @@ export default function ChatDrawer({
   const [messages, setMessages] = useState<MessageRow[]>([])
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
+  const [spamWarning, setSpamWarning] = useState(false)
+  const msgTimestamps = useRef<number[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
 
   // Load messages + mark incoming as read
@@ -98,8 +101,19 @@ export default function ChatDrawer({
   }, [messages])
 
   async function sendMessage() {
-    const trimmed = text.trim()
+    const trimmed = sanitize(text)
     if (!trimmed || sending) return
+
+    // Spam protection: max 10 messages per 60 seconds
+    const now = Date.now()
+    const recent = msgTimestamps.current.filter((t) => now - t < 60_000)
+    if (recent.length >= 10) {
+      setSpamWarning(true)
+      setTimeout(() => setSpamWarning(false), 3000)
+      return
+    }
+    msgTimestamps.current = [...recent, now]
+
     setSending(true)
     setText('')
 
@@ -199,6 +213,16 @@ export default function ChatDrawer({
           })}
           <div ref={bottomRef} />
         </div>
+
+        {/* Spam warning */}
+        {spamWarning && (
+          <div
+            className="px-4 py-2 text-xs font-semibold text-center flex-shrink-0"
+            style={{ backgroundColor: '#FFF0F5', color: '#FF2D78', borderTop: '1px solid #ffd0e0' }}
+          >
+            ⚠ Çox sürətli mesaj göndərirsiniz. Bir az gözləyin.
+          </div>
+        )}
 
         {/* Input */}
         <div

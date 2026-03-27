@@ -43,7 +43,7 @@ export default function AuthPage() {
           })
         }
 
-        setSuccess('Uğurla qeydiyyatdan keçdiniz! E-poçtunuzu təsdiqləyin.')
+        setSuccess('Uğurla qeydiyyatdan keçdiniz! Zəhmət olmasa emailinizi təsdiqləyin. Təsdiq linki göndərildi.')
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Xəta baş verdi'

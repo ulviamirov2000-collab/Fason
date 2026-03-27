@@ -80,6 +80,7 @@ export default function CameraCapture({ userId, onChange, maxPhotos = 5 }: Props
   const [selectedGuide, setSelectedGuide] = useState<GuideId>('none')
   const [cameraOpen, setCameraOpen] = useState(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
+  const [fileError, setFileError] = useState<string | null>(null)
   const [photos, setPhotos] = useState<PhotoEntry[]>([])
 
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -180,12 +181,44 @@ export default function CameraCapture({ userId, onChange, maxPhotos = 5 }: Props
     )
   }
 
+  async function validateFile(file: File): Promise<boolean> {
+    const FILE_ERR = 'Yalnız şəkil faylı yükləyə bilərsiniz (maks. 5MB)'
+    const ALLOWED = ['image/jpeg', 'image/png', 'image/webp']
+
+    if (!ALLOWED.includes(file.type)) { setFileError(FILE_ERR); return false }
+    if (file.size > 5 * 1024 * 1024) { setFileError(FILE_ERR); return false }
+
+    // Check actual file signature (magic bytes) — read first 12 bytes
+    try {
+      const buf = await file.slice(0, 12).arrayBuffer()
+      const b = new Uint8Array(buf)
+      const isJpeg = b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF
+      const isPng  = b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47
+      const isWebp = b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46
+                  && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50
+      if (!isJpeg && !isPng && !isWebp) { setFileError(FILE_ERR); return false }
+    } catch {
+      setFileError(FILE_ERR)
+      return false
+    }
+
+    setFileError(null)
+    return true
+  }
+
   async function handleGalleryFiles(files: FileList | null) {
     if (!files) return
     const remaining = maxPhotos - photos.length
-    const toAdd = Array.from(files).slice(0, remaining)
+    const candidates = Array.from(files).slice(0, remaining)
 
-    const entries: PhotoEntry[] = toAdd.map((file) => ({
+    // Validate each file before processing
+    const validated: File[] = []
+    for (const file of candidates) {
+      if (await validateFile(file)) validated.push(file)
+    }
+    if (validated.length === 0) return
+
+    const entries: PhotoEntry[] = validated.map((file) => ({
       id: Math.random().toString(36).slice(2),
       previewUrl: URL.createObjectURL(file),
       storageUrl: null,
@@ -194,8 +227,7 @@ export default function CameraCapture({ userId, onChange, maxPhotos = 5 }: Props
     }))
     setPhotos((prev) => [...prev, ...entries])
 
-    // Upload all in parallel
-    await Promise.all(entries.map((entry, i) => uploadBlob(toAdd[i], entry.id)))
+    await Promise.all(entries.map((entry, i) => uploadBlob(validated[i], entry.id)))
   }
 
   function removePhoto(id: string) {
@@ -301,6 +333,16 @@ export default function CameraCapture({ userId, onChange, maxPhotos = 5 }: Props
           style={{ backgroundColor: '#FFF0F5', color: '#FF2D78', border: '2px solid #FF2D78' }}
         >
           ⚠ {cameraError}
+        </div>
+      )}
+
+      {/* File validation error */}
+      {fileError && (
+        <div
+          className="text-sm px-4 py-3 rounded-xl"
+          style={{ backgroundColor: '#FFF0F5', color: '#FF2D78', border: '2px solid #FF2D78' }}
+        >
+          ⚠ {fileError}
         </div>
       )}
 

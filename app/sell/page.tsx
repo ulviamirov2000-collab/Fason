@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import Image from 'next/image'
 import CameraCapture, { type PhotoEntry } from '@/components/CameraCapture'
 import { CATEGORIES, CATEGORY_EMOJIS, SUBCATEGORIES, SIZES_BY_SUBCATEGORY, DEFAULT_SIZES } from '@/lib/sizes'
+import { sanitize } from '@/lib/sanitize'
 
 const steps = ['Foto', 'Məlumat', 'Qiymət', 'Yayımla']
 
@@ -85,20 +86,32 @@ export default function SellPage() {
     setPublishing(true)
     setPublishError(null)
 
+    // Rate limit: max 20 active listings per user
+    const { count: activeCount } = await supabase
+      .from('listings')
+      .select('id', { count: 'exact', head: true })
+      .eq('seller_id', userId)
+      .eq('status', 'active')
+    if ((activeCount ?? 0) >= 20) {
+      setPublishError('Maksimum 20 aktiv elan yerləşdirə bilərsiniz')
+      setPublishing(false)
+      return
+    }
+
     const uploadedUrls = photos
       .filter((p) => p.storageUrl !== null)
       .map((p) => p.storageUrl as string)
 
     const payload = {
       seller_id: userId,
-      title_az: form.title_az.trim(),
-      title_ru: form.title_ru.trim() || form.title_az.trim(),
-      description_az: form.description_az.trim() || null,
+      title_az: sanitize(form.title_az),
+      title_ru: sanitize(form.title_ru) || sanitize(form.title_az),
+      description_az: sanitize(form.description_az) || null,
       price: parseFloat(form.price),
       category: form.category || null,
       subcategory: form.subcategory || null,
       size: form.size || null,
-      brand: form.brand.trim() || null,
+      brand: sanitize(form.brand) || null,
       condition: form.condition as 'new' | 'good' | 'fair',
       images: uploadedUrls,
       status: 'active',

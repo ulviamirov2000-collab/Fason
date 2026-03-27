@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
 import type { UserRow, ListingRow } from '@/lib/supabase'
+import { sanitize } from '@/lib/sanitize'
 import MessagesUI from '@/components/MessagesUI'
 
 const statusConfig = {
@@ -95,7 +96,7 @@ export default function ProfilePage() {
       showToast('Xəta: istifadəçi tapılmadı')
       return
     }
-    const newName = editName.trim()
+    const newName = sanitize(editName)
     setSaving(true)
 
     const { data, error } = await supabase
