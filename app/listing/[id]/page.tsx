@@ -173,10 +173,14 @@ export default function ListingPage() {
               style={{ border: '2px solid #1a1040', backgroundColor: 'white' }}
             >
               <div
-                className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-yellow-400 flex items-center justify-center text-lg font-bold text-white flex-shrink-0"
+                className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-yellow-400 overflow-hidden flex items-center justify-center text-lg font-bold text-white flex-shrink-0"
                 style={{ border: '2px solid #1a1040' }}
               >
-                {sellerName[0].toUpperCase()}
+                {seller.avatar_url ? (
+                  <Image src={seller.avatar_url} alt={sellerName} width={48} height={48} className="object-cover w-full h-full" unoptimized />
+                ) : (
+                  sellerName[0].toUpperCase()
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm truncate" style={{ color: '#1a1040' }}>
@@ -224,6 +228,7 @@ export default function ListingPage() {
         listingId={listing.id}
         sellerId={seller.id}
         sellerName={sellerName}
+        sellerAvatarUrl={seller.avatar_url ?? undefined}
         listingTitle={listing.title_az}
         listingPrice={listing.price}
         listingImage={hasImages ? listing.images[0] : undefined}

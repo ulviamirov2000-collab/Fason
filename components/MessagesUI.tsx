@@ -13,6 +13,7 @@ type Conversation = {
   listingImage?: string
   otherUserId: string
   otherUserName: string
+  otherUserAvatar?: string
   lastMessage: string
   lastMessageAt: string
   unreadCount: number
@@ -68,7 +69,7 @@ export default function MessagesUI({ currentUserId }: Props) {
 
     const [{ data: listingsData }, { data: usersData }] = await Promise.all([
       supabase.from('listings').select('id, title_az, images, price').in('id', listingIds),
-      supabase.from('users').select('id, full_name, email').in('id', otherUserIds),
+      supabase.from('users').select('id, full_name, email, avatar_url').in('id', otherUserIds),
     ])
 
     const listingMap = new Map((listingsData ?? []).map((l) => [l.id, l]))
@@ -92,6 +93,7 @@ export default function MessagesUI({ currentUserId }: Props) {
           listingImage: listing?.images?.[0] as string | undefined,
           otherUserId,
           otherUserName: name,
+          otherUserAvatar: (otherUser as { avatar_url?: string | null } | undefined)?.avatar_url ?? undefined,
           lastMessage: msg.text,
           lastMessageAt: msg.created_at,
           unreadCount: 0,
@@ -244,10 +246,14 @@ export default function MessagesUI({ currentUserId }: Props) {
               >
                 {/* Avatar */}
                 <div
-                  className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-400 to-yellow-400 flex items-center justify-center text-sm font-bold text-white flex-shrink-0 mt-0.5"
+                  className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-400 to-yellow-400 overflow-hidden flex items-center justify-center text-sm font-bold text-white flex-shrink-0 mt-0.5"
                   style={{ border: '2px solid #1a1040' }}
                 >
-                  {conv.otherUserName[0]?.toUpperCase() ?? '?'}
+                  {conv.otherUserAvatar ? (
+                    <Image src={conv.otherUserAvatar} alt={conv.otherUserName} width={40} height={40} className="object-cover w-full h-full" unoptimized />
+                  ) : (
+                    conv.otherUserName[0]?.toUpperCase() ?? '?'
+                  )}
                 </div>
 
                 <div className="flex-1 min-w-0">
@@ -312,10 +318,14 @@ export default function MessagesUI({ currentUserId }: Props) {
               <p className="text-xs font-bold" style={{ color: '#FFE600' }}>{activeConv.listingPrice} ₼</p>
             </div>
             <div
-              className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-yellow-400 flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+              className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-yellow-400 overflow-hidden flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
               style={{ border: '1.5px solid #FFE600' }}
             >
-              {activeConv.otherUserName[0]?.toUpperCase() ?? '?'}
+              {activeConv.otherUserAvatar ? (
+                <Image src={activeConv.otherUserAvatar} alt={activeConv.otherUserName} width={32} height={32} className="object-cover w-full h-full" unoptimized />
+              ) : (
+                activeConv.otherUserName[0]?.toUpperCase() ?? '?'
+              )}
             </div>
             <span className="text-white/60 text-xs hidden sm:block truncate max-w-[80px]">
               {activeConv.otherUserName}
