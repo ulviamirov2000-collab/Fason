@@ -106,13 +106,15 @@ export default function ChatDrawer({
 
   return (
     <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} />
+      {/* Backdrop — full dim on mobile, subtle on desktop */}
+      <div className="fixed inset-0 z-40 bg-black/50 md:bg-black/20" onClick={onClose} />
 
-      {/* Bottom sheet */}
+      {/* Sheet — bottom sheet on mobile, right panel on desktop */}
       <div
-        className="fixed bottom-0 left-0 right-0 z-50 flex flex-col rounded-t-3xl overflow-hidden"
-        style={{ backgroundColor: 'white', border: '2px solid #1a1040', borderBottom: 'none', maxHeight: '85vh', height: '85vh' }}
+        className="fixed z-50 flex flex-col overflow-hidden
+                   bottom-0 left-0 right-0 rounded-t-3xl
+                   md:bottom-4 md:right-4 md:left-auto md:w-[440px] md:rounded-3xl"
+        style={{ backgroundColor: 'white', border: '2px solid #1a1040', maxHeight: '85vh', height: '85vh' }}
       >
         {/* Header */}
         <div

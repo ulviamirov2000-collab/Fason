@@ -79,9 +79,9 @@ export default function ListingPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Image Gallery */}
         <div className="flex flex-col gap-3">
-          {/* Main image */}
+          {/* Main image — fixed height so it never dominates desktop layout */}
           <div
-            className="w-full aspect-[3/4] rounded-2xl overflow-hidden bg-gradient-to-br from-pink-100 to-yellow-100 flex items-center justify-center"
+            className="relative w-full h-[340px] md:h-[500px] rounded-2xl overflow-hidden bg-gradient-to-br from-pink-100 to-yellow-100 flex items-center justify-center"
             style={{ border: '2px solid #1a1040' }}
           >
             {hasImages ? (
@@ -89,7 +89,7 @@ export default function ListingPage() {
                 src={listing.images[activeImg]}
                 alt={listing.title_az}
                 fill
-                className="object-cover rounded-2xl"
+                className="object-cover"
                 unoptimized
               />
             ) : (
