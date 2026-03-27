@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Space_Grotesk, Unbounded } from 'next/font/google'
 import './globals.css'
 import Navbar from '@/components/Navbar'
+import { Analytics } from '@vercel/analytics/react'
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
@@ -36,6 +37,7 @@ export default function RootLayout({
       >
         <Navbar />
         {children}
+        <Analytics />
       </body>
     </html>
   )
