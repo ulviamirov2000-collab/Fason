@@ -9,6 +9,7 @@ type Props = {
   listingId: string
   sellerId: string
   sellerName: string
+  sellerAvatarUrl?: string | null
   listingTitle: string
   listingPrice: number
   listingImage?: string
@@ -21,7 +22,7 @@ function formatTime(iso: string) {
 }
 
 export default function ChatDrawer({
-  listingId, sellerId, sellerName, listingTitle, listingPrice, listingImage,
+  listingId, sellerId, sellerName, sellerAvatarUrl, listingTitle, listingPrice, listingImage,
   currentUserId, onClose,
 }: Props) {
   const [messages, setMessages] = useState<MessageRow[]>([])
@@ -134,10 +135,14 @@ export default function ChatDrawer({
           </div>
           <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
             <div
-              className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-yellow-400 flex items-center justify-center text-xs font-bold text-white"
+              className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-yellow-400 overflow-hidden flex items-center justify-center text-xs font-bold text-white"
               style={{ border: '1.5px solid #FFE600' }}
             >
-              {sellerName[0]?.toUpperCase() ?? '?'}
+              {sellerAvatarUrl ? (
+                <Image src={sellerAvatarUrl} alt={sellerName} width={32} height={32} className="object-cover w-full h-full" unoptimized />
+              ) : (
+                sellerName[0]?.toUpperCase() ?? '?'
+              )}
             </div>
             <p className="text-white/60 text-xs truncate max-w-[60px]">{sellerName}</p>
           </div>

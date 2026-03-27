@@ -14,7 +14,7 @@ export type MockListing = {
   images: string[]
   seller: {
     name: string
-    avatar: string
+    avatar_url?: string | null
   }
   rotation?: number
 }
@@ -96,10 +96,14 @@ export default function ListingCard({
           <div className="flex items-center justify-between mt-2">
             <div className="flex items-center gap-1.5">
               <div
-                className="w-6 h-6 rounded-full bg-gradient-to-br from-pink-400 to-yellow-400 flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+                className="w-6 h-6 rounded-full bg-gradient-to-br from-pink-400 to-yellow-400 overflow-hidden flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
                 style={{ border: '1.5px solid #1a1040' }}
               >
-                {listing.seller.name[0]}
+                {listing.seller.avatar_url ? (
+                  <Image src={listing.seller.avatar_url} alt={listing.seller.name} width={24} height={24} className="object-cover w-full h-full" unoptimized />
+                ) : (
+                  listing.seller.name[0]
+                )}
               </div>
               <span className="text-xs text-gray-500 truncate max-w-[80px]">
                 {listing.seller.name}

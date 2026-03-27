@@ -14,6 +14,7 @@ export default function Navbar() {
   const [user, setUser] = useState<User | null>(null)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -27,6 +28,30 @@ export default function Navbar() {
 
     return () => subscription.unsubscribe()
   }, [])
+
+  // Fetch avatar + subscribe to profile updates
+  useEffect(() => {
+    if (!user) { setAvatarUrl(null); return }
+
+    supabase
+      .from('users')
+      .select('avatar_url')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => setAvatarUrl(data?.avatar_url ?? null))
+
+    const channel = supabase
+      .channel(`navbar-avatar:${user.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'users',
+        filter: `id=eq.${user.id}`,
+      }, (payload) => { setAvatarUrl(payload.new.avatar_url ?? null) })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [user])
 
   // Unread message count
   useEffect(() => {
@@ -167,10 +192,14 @@ export default function Navbar() {
                 aria-label="Profil menyusu"
               >
                 <div
-                  className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-black"
-                  style={{ backgroundColor: '#FFE600', border: '2px solid #FF2D78' }}
+                  className="w-9 h-9 rounded-full overflow-hidden bg-gradient-to-br from-pink-400 to-yellow-400 flex items-center justify-center text-sm font-bold"
+                  style={{ border: '2px solid #FF2D78' }}
                 >
-                  {initials}
+                  {avatarUrl ? (
+                    <Image src={avatarUrl} alt="Avatar" width={36} height={36} className="object-cover w-full h-full" unoptimized />
+                  ) : (
+                    <span className="text-black" style={{ color: '#1a1040' }}>{initials}</span>
+                  )}
                 </div>
               </button>
 

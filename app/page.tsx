@@ -9,7 +9,7 @@ import type { ListingRow } from '@/lib/supabase'
 
 const ROTATIONS: (-1 | 0 | 1)[] = [-1, 1, -1, 0, 1, -1, 0, 1]
 
-function toCard(l: ListingRow, sellerName: string, index: number): MockListing {
+function toCard(l: ListingRow, seller: { name: string; avatar_url?: string | null }, index: number): MockListing {
   return {
     id: l.id,
     title_az: l.title_az,
@@ -18,7 +18,7 @@ function toCard(l: ListingRow, sellerName: string, index: number): MockListing {
     brand: l.brand ?? '',
     condition: l.condition,
     images: l.images,
-    seller: { name: sellerName, avatar: '' },
+    seller,
     rotation: ROTATIONS[index % ROTATIONS.length],
   }
 }
@@ -31,16 +31,16 @@ export default function HomePage() {
     async function fetchListings() {
       const { data } = await supabase
         .from('listings')
-        .select('*, users:seller_id(full_name, email)')
+        .select('*, users:seller_id(full_name, email, avatar_url)')
         .eq('status', 'active')
         .order('created_at', { ascending: false })
         .limit(40)
 
       if (data) {
-        const cards = data.map((row: ListingRow & { users?: { full_name: string | null; email: string | null } | null }, i: number) => {
+        const cards = data.map((row: ListingRow & { users?: { full_name: string | null; email: string | null; avatar_url: string | null } | null }, i: number) => {
           const u = row.users
           const name = u?.full_name || u?.email?.split('@')[0] || 'Satıcı'
-          return toCard(row, name, i)
+          return toCard(row, { name, avatar_url: u?.avatar_url ?? null }, i)
         })
         setListings(cards)
       }
