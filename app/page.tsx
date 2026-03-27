@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback } from 'react'
 import FilterBar from '@/components/FilterBar'
 import SearchBar from '@/components/SearchBar'
 import ListingCard, { MockListing } from '@/components/ListingCard'
+import Footer from '@/components/Footer'
 import { supabase } from '@/lib/supabase'
 import type { ListingRow } from '@/lib/supabase'
 
@@ -246,6 +247,112 @@ export default function HomePage() {
           </div>
         )}
       </section>
+
+      {/* ── Haqqımızda ── */}
+      <section
+        id="about"
+        className="w-full py-20 px-4"
+        style={{ backgroundColor: '#1a1040' }}
+      >
+        <div className="max-w-5xl mx-auto flex flex-col items-center gap-10">
+          <div className="text-center">
+            <p className="text-xs font-bold tracking-widest uppercase mb-2" style={{ color: '#FF2D78' }}>
+              Haqqımızda
+            </p>
+            <h2
+              className="text-2xl sm:text-3xl font-bold text-white"
+              style={{ fontFamily: 'var(--font-unbounded)' }}
+            >
+              FASON nədir?
+            </h2>
+            <p className="mt-4 text-sm leading-relaxed max-w-xl mx-auto" style={{ color: 'rgba(255,255,255,0.6)' }}>
+              FASON — Azərbaycanın ikinci əl geyim, ayaqqabı və aksesuar alqı-satqı platformasıdır.
+              Dolabında artıq geyinmədiklərini sat, yeni sevimlilər tap.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 w-full">
+            {[
+              {
+                emoji: '🛡️',
+                title: 'Təhlükəsiz alqı-satqı',
+                desc: 'Satıcılarla birbaşa əlaqə qur, öz şərtlərinlə razılaş.',
+              },
+              {
+                emoji: '💰',
+                title: 'Pul qazan',
+                desc: 'Geyinmədiklərini sat, pula çevir. Elan vermək tamamilə pulsuzdur.',
+              },
+              {
+                emoji: '🔍',
+                title: 'Asan axtarış',
+                desc: 'Kateqoriya, ölçü, brend və qiymət üzrə filter et — istədiyini tap.',
+              },
+            ].map((card) => (
+              <div
+                key={card.title}
+                className="flex flex-col gap-3 p-6 rounded-2xl"
+                style={{ backgroundColor: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' }}
+              >
+                <span className="text-3xl">{card.emoji}</span>
+                <p className="font-bold text-white text-sm">{card.title}</p>
+                <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>{card.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Əlaqə ── */}
+      <section
+        id="contact"
+        className="w-full py-20 px-4"
+        style={{ backgroundColor: '#FAF7F2' }}
+      >
+        <div className="max-w-xl mx-auto flex flex-col items-center gap-6 text-center">
+          <p className="text-xs font-bold tracking-widest uppercase" style={{ color: '#FF2D78' }}>
+            Əlaqə
+          </p>
+          <h2
+            className="text-2xl font-bold"
+            style={{ fontFamily: 'var(--font-unbounded)', color: '#1a1040' }}
+          >
+            Bizimlə əlaqə saxla
+          </h2>
+          <p className="text-sm text-gray-500 leading-relaxed">
+            Sual, təklif və ya problemlə üzləşdinsə — bizə yaz. Tez cavab veririk!
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 w-full justify-center">
+            <a
+              href="https://www.tiktok.com/@fason.store"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-bold text-sm text-white transition-transform hover:scale-[1.02] active:scale-[0.98]"
+              style={{ backgroundColor: '#1a1040', border: '2px solid #1a1040', boxShadow: '3px 3px 0 #FF2D78' }}
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.22 8.22 0 004.84 1.56V6.8a4.85 4.85 0 01-1.07-.11z" />
+              </svg>
+              TikTok: @fason.store
+            </a>
+            <a
+              href="mailto:fason.store@gmail.com"
+              className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-bold text-sm transition-transform hover:scale-[1.02] active:scale-[0.98]"
+              style={{ backgroundColor: '#FFE600', border: '2px solid #1a1040', color: '#1a1040', boxShadow: '3px 3px 0 #1a1040' }}
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              E-poçt yaz
+            </a>
+          </div>
+          <p className="text-xs text-gray-400">
+            Instagram — Tezliklə aktiv olacaq
+          </p>
+        </div>
+      </section>
+
+      <Footer />
     </main>
   )
 }
