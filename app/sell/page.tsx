@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Image from 'next/image'
 import CameraCapture, { type PhotoEntry } from '@/components/CameraCapture'
-import { SELL_CATEGORIES, SIZES_BY_CATEGORY, DEFAULT_SIZES } from '@/lib/sizes'
+import { CATEGORIES, CATEGORY_EMOJIS, SUBCATEGORIES, SIZES_BY_SUBCATEGORY, DEFAULT_SIZES } from '@/lib/sizes'
 
 const steps = ['Foto', 'Məlumat', 'Qiymət', 'Yayımla']
 
@@ -23,6 +23,11 @@ export default function SellPage() {
   const [publishing, setPublishing] = useState(false)
   const [publishError, setPublishError] = useState<string | null>(null)
 
+  // Subcategory dropdown state
+  const [subSearch, setSubSearch] = useState('')
+  const [subOpen, setSubOpen] = useState(false)
+  const subInputRef = useRef<HTMLInputElement>(null)
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) router.replace('/auth')
@@ -30,7 +35,6 @@ export default function SellPage() {
     })
   }, [router])
 
-  // Photos managed by CameraCapture, synced here for publish step
   const [photos, setPhotos] = useState<PhotoEntry[]>([])
 
   const [form, setForm] = useState({
@@ -38,6 +42,7 @@ export default function SellPage() {
     title_ru: '',
     description_az: '',
     category: '',
+    subcategory: '',
     size: '',
     brand: '',
     condition: '',
@@ -46,8 +51,32 @@ export default function SellPage() {
 
   const update = (field: string, val: string) => setForm((f) => ({ ...f, [field]: val }))
 
+  // Filtered subcategory list based on search input
+  const allSubs = form.category ? (SUBCATEGORIES[form.category] ?? []) : []
+  const filteredSubs = subSearch
+    ? allSubs.filter((s) => s.toLowerCase().includes(subSearch.toLowerCase()))
+    : allSubs
+
+  // Sizes for selected subcategory
+  const sizes = form.subcategory
+    ? (SIZES_BY_SUBCATEGORY[form.subcategory] ?? DEFAULT_SIZES)
+    : DEFAULT_SIZES
+
+  function selectCategory(cat: string) {
+    setForm((f) => ({ ...f, category: cat, subcategory: '', size: '' }))
+    setSubSearch('')
+    setSubOpen(false)
+  }
+
+  function selectSubcategory(sub: string) {
+    setForm((f) => ({ ...f, subcategory: sub, size: '' }))
+    setSubSearch('')
+    setSubOpen(false)
+  }
+
+  const step1Valid = !!(form.category && form.subcategory && form.condition)
+
   async function publishListing() {
-    // Validate required fields
     if (!userId) { setPublishError('İstifadəçi tapılmadı. Yenidən daxil olun.'); return }
     if (!form.title_az.trim()) { setPublishError('Başlıq tələb olunur (Azərbaycanca).'); return }
     if (!form.price || parseFloat(form.price) <= 0) { setPublishError('Düzgün qiymət daxil edin.'); return }
@@ -56,12 +85,9 @@ export default function SellPage() {
     setPublishing(true)
     setPublishError(null)
 
-    // Collect already-uploaded URLs; skip any that failed or are still uploading
     const uploadedUrls = photos
       .filter((p) => p.storageUrl !== null)
       .map((p) => p.storageUrl as string)
-
-    console.log('[publish] using uploaded URLs:', uploadedUrls)
 
     const payload = {
       seller_id: userId,
@@ -70,6 +96,7 @@ export default function SellPage() {
       description_az: form.description_az.trim() || null,
       price: parseFloat(form.price),
       category: form.category || null,
+      subcategory: form.subcategory || null,
       size: form.size || null,
       brand: form.brand.trim() || null,
       condition: form.condition as 'new' | 'good' | 'fair',
@@ -77,17 +104,14 @@ export default function SellPage() {
       status: 'active',
     }
 
-    console.log('[publish] payload:', payload)
-
     const { data, error } = await supabase.from('listings').insert(payload).select().single()
-
-    console.log('[publish] response:', { data, error })
 
     setPublishing(false)
     if (error) {
       setPublishError(`Xəta: ${error.message} (${error.code})`)
       return
     }
+    console.log('[publish] success:', data)
     router.push('/')
   }
 
@@ -138,12 +162,13 @@ export default function SellPage() {
 
       {/* ─── Step 1 — Details ───────────────────────────────────────── */}
       {step === 1 && (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-5">
           <h2 className="text-lg font-bold" style={{ color: '#1a1040' }}>Məlumatlar</h2>
+
           <input
             className={inputClass}
             style={inputStyle}
-            placeholder="Başlıq (Azərbaycanca)"
+            placeholder="Başlıq (Azərbaycanca) *"
             value={form.title_az}
             onChange={(e) => update('title_az', e.target.value)}
           />
@@ -170,60 +195,132 @@ export default function SellPage() {
             onChange={(e) => update('brand', e.target.value)}
           />
 
-          {/* Category */}
+          {/* ── Category cards ── */}
           <div>
-            <p className="text-sm font-semibold mb-2" style={{ color: '#1a1040' }}>Kateqoriya</p>
-            <div className="flex flex-wrap gap-2">
-              {SELL_CATEGORIES.map((c) => (
+            <p className="text-sm font-semibold mb-3" style={{ color: '#1a1040' }}>
+              Kateqoriya <span style={{ color: '#FF2D78' }}>*</span>
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {CATEGORIES.map((cat) => (
                 <button
-                  key={c}
-                  onClick={() => {
-                    update('category', c)
-                    // Clear size when category changes — sizes are incompatible across categories
-                    if (form.category !== c) update('size', '')
-                  }}
-                  className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all"
+                  key={cat}
+                  onClick={() => selectCategory(cat)}
+                  className="flex flex-col items-center justify-center gap-1.5 py-4 px-2 rounded-2xl transition-all hover:scale-[1.02] active:scale-[0.98]"
                   style={
-                    form.category === c
-                      ? { backgroundColor: '#FF2D78', color: 'white', border: '2px solid #1a1040' }
-                      : { backgroundColor: 'white', color: '#1a1040', border: '2px solid #ccc' }
+                    form.category === cat
+                      ? { backgroundColor: '#FF2D78', border: '2px solid #1a1040', boxShadow: '3px 3px 0 #1a1040' }
+                      : { backgroundColor: 'white', border: '2px solid #ccc' }
                   }
                 >
-                  {c}
+                  <span className="text-2xl">{CATEGORY_EMOJIS[cat]}</span>
+                  <span
+                    className="text-xs font-semibold text-center leading-tight"
+                    style={{ color: form.category === cat ? 'white' : '#1a1040' }}
+                  >
+                    {cat}
+                  </span>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Size — chips depend on selected category */}
+          {/* ── Subcategory searchable dropdown ── */}
+          {form.category && (
+            <div>
+              <p className="text-sm font-semibold mb-2" style={{ color: '#1a1040' }}>
+                Növ <span style={{ color: '#FF2D78' }}>*</span>
+              </p>
+              <div className="relative">
+                <div
+                  className="flex items-center gap-2 px-4 py-3 rounded-xl cursor-text"
+                  style={{ border: `2px solid ${form.subcategory ? '#FF2D78' : '#1a1040'}`, backgroundColor: 'white' }}
+                  onClick={() => { setSubOpen(true); subInputRef.current?.focus() }}
+                >
+                  {form.subcategory && !subOpen ? (
+                    <>
+                      <span className="flex-1 text-sm font-semibold" style={{ color: '#1a1040' }}>
+                        {form.subcategory}
+                      </span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); selectSubcategory(''); setSubOpen(true); subInputRef.current?.focus() }}
+                        className="text-gray-400 hover:text-gray-700 text-lg leading-none flex-shrink-0"
+                      >
+                        ×
+                      </button>
+                    </>
+                  ) : (
+                    <input
+                      ref={subInputRef}
+                      type="text"
+                      value={subSearch}
+                      onChange={(e) => { setSubSearch(e.target.value); setSubOpen(true) }}
+                      onFocus={() => setSubOpen(true)}
+                      onBlur={() => setTimeout(() => setSubOpen(false), 150)}
+                      placeholder={form.subcategory || 'Növü axtar və ya seçin...'}
+                      className="flex-1 text-sm outline-none bg-transparent"
+                    />
+                  )}
+                </div>
+
+                {subOpen && filteredSubs.length > 0 && (
+                  <div
+                    className="absolute top-full left-0 right-0 z-20 mt-1 rounded-xl overflow-hidden overflow-y-auto"
+                    style={{ border: '2px solid #1a1040', backgroundColor: 'white', maxHeight: '220px', boxShadow: '3px 3px 0 #1a1040' }}
+                  >
+                    {filteredSubs.map((sub) => (
+                      <button
+                        key={sub}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => selectSubcategory(sub)}
+                        className="w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-pink-50"
+                        style={sub === form.subcategory ? { backgroundColor: '#FFF0F5', fontWeight: 600, color: '#FF2D78' } : { color: '#1a1040' }}
+                      >
+                        {sub}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {subOpen && filteredSubs.length === 0 && (
+                  <div
+                    className="absolute top-full left-0 right-0 z-20 mt-1 rounded-xl px-4 py-3 text-sm text-gray-400"
+                    style={{ border: '2px solid #e5e7eb', backgroundColor: 'white' }}
+                  >
+                    Nəticə tapılmadı
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── Size chips ── */}
+          {form.subcategory && (
+            <div>
+              <p className="text-sm font-semibold mb-2" style={{ color: '#1a1040' }}>Ölçü</p>
+              <div className="flex flex-wrap gap-2">
+                {sizes.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => update('size', form.size === s ? '' : s)}
+                    className="min-w-[44px] px-3 py-2 rounded-xl text-xs font-bold transition-all"
+                    style={
+                      form.size === s
+                        ? { backgroundColor: '#FFE600', color: '#1a1040', border: '2px solid #1a1040' }
+                        : { backgroundColor: 'white', color: '#1a1040', border: '2px solid #ccc' }
+                    }
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Condition ── */}
           <div>
             <p className="text-sm font-semibold mb-2" style={{ color: '#1a1040' }}>
-              Ölçü
-              {!form.category && (
-                <span className="ml-1 font-normal text-gray-400">(kateqoriya seçin)</span>
-              )}
+              Vəziyyət <span style={{ color: '#FF2D78' }}>*</span>
             </p>
-            <div className="flex flex-wrap gap-2">
-              {(form.category ? (SIZES_BY_CATEGORY[form.category] ?? DEFAULT_SIZES) : DEFAULT_SIZES).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => update('size', form.size === s ? '' : s)}
-                  className="min-w-[44px] px-3 py-2 rounded-xl text-xs font-bold transition-all"
-                  style={
-                    form.size === s
-                      ? { backgroundColor: '#FFE600', color: '#1a1040', border: '2px solid #1a1040' }
-                      : { backgroundColor: 'white', color: '#1a1040', border: '2px solid #ccc' }
-                  }
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Condition */}
-          <div>
-            <p className="text-sm font-semibold mb-2" style={{ color: '#1a1040' }}>Vəziyyət</p>
             <div className="flex flex-col gap-2">
               {conditions.map((c) => (
                 <button
@@ -245,6 +342,13 @@ export default function SellPage() {
               ))}
             </div>
           </div>
+
+          {/* Validation hint */}
+          {!step1Valid && (
+            <p className="text-xs text-gray-400">
+              {!form.category ? '↑ Kateqoriya seçilməlidir' : !form.subcategory ? '↑ Növ seçilməlidir' : '↑ Vəziyyət seçilməlidir'}
+            </p>
+          )}
         </div>
       )}
 
@@ -285,6 +389,28 @@ export default function SellPage() {
           <p className="text-sm text-gray-500 max-w-xs">
             Elanını yayımla, alıcıların sənə çatacaq!
           </p>
+
+          {/* Summary */}
+          {(form.category || form.subcategory) && (
+            <div
+              className="flex items-center gap-2 px-4 py-2 rounded-full text-sm"
+              style={{ backgroundColor: '#FAF7F2', border: '2px solid #1a1040' }}
+            >
+              <span>{CATEGORY_EMOJIS[form.category]}</span>
+              <span className="font-medium" style={{ color: '#1a1040' }}>
+                {form.category}{form.subcategory ? ` › ${form.subcategory}` : ''}
+              </span>
+              {form.size && (
+                <span
+                  className="px-2 py-0.5 rounded-full text-xs font-bold"
+                  style={{ backgroundColor: '#FFE600', color: '#1a1040' }}
+                >
+                  {form.size}
+                </span>
+              )}
+            </div>
+          )}
+
           {publishError && (
             <div
               className="w-full px-4 py-3 rounded-xl text-sm"
@@ -339,8 +465,12 @@ export default function SellPage() {
         </button>
         {step < steps.length - 1 && (
           <button
-            onClick={() => setStep((s) => Math.min(steps.length - 1, s + 1))}
-            className="px-5 py-2.5 rounded-xl font-bold text-white text-sm transition-transform hover:scale-105"
+            onClick={() => {
+              if (step === 1 && !step1Valid) return
+              setStep((s) => Math.min(steps.length - 1, s + 1))
+            }}
+            disabled={step === 1 && !step1Valid}
+            className="px-5 py-2.5 rounded-xl font-bold text-white text-sm transition-transform hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ backgroundColor: '#FF2D78' }}
           >
             İrəli →

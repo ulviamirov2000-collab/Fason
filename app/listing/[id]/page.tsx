@@ -72,6 +72,8 @@ export default function ListingPage() {
   const seller = listing.users
   const sellerName = seller?.full_name || seller?.email?.split('@')[0] || 'Satıcı'
   const hasImages = listing.images && listing.images.length > 0
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const subcategory: string | null = (listing as any).subcategory ?? null
 
   return (
     <>
@@ -116,6 +118,16 @@ export default function ListingPage() {
 
         {/* Info */}
         <div className="flex flex-col gap-4">
+          {/* Breadcrumb */}
+          {listing.category && (
+            <p className="text-xs text-gray-400 font-medium">
+              {listing.category}
+              {subcategory && (
+                <span> › <span style={{ color: '#FF2D78' }}>{subcategory}</span></span>
+              )}
+            </p>
+          )}
+
           {/* Title + price */}
           <div>
             <h1
