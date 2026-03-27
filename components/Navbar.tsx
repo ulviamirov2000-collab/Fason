@@ -125,16 +125,6 @@ export default function Navbar() {
           />
         </Link>
 
-        {/* Search */}
-        <div className="flex-1 max-w-xl mx-auto">
-          <input
-            type="text"
-            placeholder={lang === 'AZ' ? 'Axtar...' : 'Поиск...'}
-            className="w-full rounded-full px-4 py-2 text-sm bg-white/10 text-white placeholder-white/50 outline-none focus:ring-2"
-            style={{ border: '2px solid #FF2D78' }}
-          />
-        </div>
-
         {/* Right side */}
         <div className="flex items-center gap-2 flex-shrink-0">
           {/* Language toggle */}
