@@ -5,11 +5,10 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Image from 'next/image'
 import CameraCapture, { type PhotoEntry } from '@/components/CameraCapture'
+import { SELL_CATEGORIES, SIZES_BY_CATEGORY, DEFAULT_SIZES } from '@/lib/sizes'
 
 const steps = ['Foto', 'Məlumat', 'Qiymət', 'Yayımla']
 
-const categories = ['Geyim', 'Ayaqqabı', 'Aksesuar', 'Çanta']
-const sizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL']
 const conditions = [
   { value: 'new', label: 'Yeni', color: '#00E5CC', desc: 'Heç geyilməyib, etiket üstündə ola bilər' },
   { value: 'good', label: 'Yaxşı', color: '#FF9500', desc: 'Az istifadə edilib, əla vəziyyətdə' },
@@ -175,10 +174,14 @@ export default function SellPage() {
           <div>
             <p className="text-sm font-semibold mb-2" style={{ color: '#1a1040' }}>Kateqoriya</p>
             <div className="flex flex-wrap gap-2">
-              {categories.map((c) => (
+              {SELL_CATEGORIES.map((c) => (
                 <button
                   key={c}
-                  onClick={() => update('category', c)}
+                  onClick={() => {
+                    update('category', c)
+                    // Clear size when category changes — sizes are incompatible across categories
+                    if (form.category !== c) update('size', '')
+                  }}
                   className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all"
                   style={
                     form.category === c
@@ -192,15 +195,20 @@ export default function SellPage() {
             </div>
           </div>
 
-          {/* Size */}
+          {/* Size — chips depend on selected category */}
           <div>
-            <p className="text-sm font-semibold mb-2" style={{ color: '#1a1040' }}>Ölçü</p>
+            <p className="text-sm font-semibold mb-2" style={{ color: '#1a1040' }}>
+              Ölçü
+              {!form.category && (
+                <span className="ml-1 font-normal text-gray-400">(kateqoriya seçin)</span>
+              )}
+            </p>
             <div className="flex flex-wrap gap-2">
-              {sizes.map((s) => (
+              {(form.category ? (SIZES_BY_CATEGORY[form.category] ?? DEFAULT_SIZES) : DEFAULT_SIZES).map((s) => (
                 <button
                   key={s}
-                  onClick={() => update('size', s)}
-                  className="w-12 h-10 rounded-xl text-xs font-bold transition-all"
+                  onClick={() => update('size', form.size === s ? '' : s)}
+                  className="min-w-[44px] px-3 py-2 rounded-xl text-xs font-bold transition-all"
                   style={
                     form.size === s
                       ? { backgroundColor: '#FFE600', color: '#1a1040', border: '2px solid #1a1040' }

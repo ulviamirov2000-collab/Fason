@@ -1,11 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import { FILTER_SIZES_BY_CATEGORY, DEFAULT_SIZES } from '@/lib/sizes'
 
 const categories_az = ['Hamısı', 'Geyim', 'Ayaqqabı', 'Aksesuar', 'Çanta']
 const categories_ru = ['Все', 'Одежда', 'Обувь', 'Аксессуары', 'Сумки']
-
-const sizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL']
+// Maps AZ category index to key used in FILTER_SIZES_BY_CATEGORY
+const categoryKeys = [null, 'Geyim', 'Ayaqqabı', 'Aksesuar', 'Çanta']
 
 const conditions_az = ['Hamısı', 'Yeni', 'Yaxşı', 'Orta']
 const conditions_ru = ['Все', 'Новый', 'Хорошее', 'Среднее']
@@ -18,6 +19,9 @@ export default function FilterBar({ lang = 'AZ' }: { lang?: 'AZ' | 'RU' }) {
 
   const categories = lang === 'AZ' ? categories_az : categories_ru
   const conditions = lang === 'AZ' ? conditions_az : conditions_ru
+
+  const catKey = categoryKeys[category]
+  const sizes = catKey ? (FILTER_SIZES_BY_CATEGORY[catKey] ?? DEFAULT_SIZES) : DEFAULT_SIZES
 
   const chipBase =
     'flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer border-2 whitespace-nowrap'
@@ -35,7 +39,7 @@ export default function FilterBar({ lang = 'AZ' }: { lang?: 'AZ' | 'RU' }) {
           {categories.map((cat, i) => (
             <button
               key={cat}
-              onClick={() => setCategory(i)}
+              onClick={() => { setCategory(i); setSize(null) }}
               className={`${chipBase} ${
                 category === i
                   ? `${chipActive}`
