@@ -31,6 +31,10 @@ export default function ProfilePage() {
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Avatar upload
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+
   function showToast(msg: string) {
     if (toastTimer.current) clearTimeout(toastTimer.current)
     setToast(msg)
@@ -115,6 +119,27 @@ export default function ProfilePage() {
     showToast('Ad uğurla yeniləndi ✓')
   }
 
+  async function uploadAvatar(file: File) {
+    if (!currentUserId) return
+    setAvatarUploading(true)
+    const path = `${currentUserId}/avatar.jpg`
+    const { data, error } = await supabase.storage
+      .from('avatars')
+      .upload(path, file, { contentType: file.type, upsert: true })
+    if (error || !data) {
+      showToast(`Xəta: ${error?.message ?? 'Yüklənmədi'}`)
+      setAvatarUploading(false)
+      return
+    }
+    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
+    // Bust cache by appending timestamp
+    const urlWithBust = `${publicUrl}?t=${Date.now()}`
+    await supabase.from('users').update({ avatar_url: urlWithBust }).eq('id', currentUserId)
+    setProfileUser((prev) => prev ? { ...prev, avatar_url: urlWithBust } : prev)
+    setAvatarUploading(false)
+    showToast('Foto yeniləndi ✓')
+  }
+
   async function setListingStatus(listingId: string, status: 'archived' | 'sold') {
     const { error } = await supabase
       .from('listings')
@@ -179,11 +204,62 @@ export default function ProfilePage() {
         style={{ backgroundColor: '#1a1040', border: '2px solid #1a1040' }}
       >
         {/* Avatar */}
-        <div
-          className="w-20 h-20 rounded-full bg-gradient-to-br from-pink-400 to-yellow-400 flex items-center justify-center text-3xl font-bold text-white flex-shrink-0"
-          style={{ border: '3px solid #FFE600' }}
-        >
-          {displayName[0].toUpperCase()}
+        <div className="relative flex-shrink-0">
+          {/* Hidden file input */}
+          {isOwner && (
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) uploadAvatar(file)
+                e.target.value = ''
+              }}
+            />
+          )}
+
+          {/* Avatar circle */}
+          <div
+            className="w-20 h-20 rounded-full overflow-hidden bg-gradient-to-br from-pink-400 to-yellow-400 flex items-center justify-center text-3xl font-bold text-white"
+            style={{ border: '3px solid #FFE600' }}
+          >
+            {profileUser.avatar_url ? (
+              <Image
+                src={profileUser.avatar_url}
+                alt={displayName}
+                width={80}
+                height={80}
+                className="object-cover w-full h-full"
+                unoptimized
+              />
+            ) : (
+              <span>{displayName[0].toUpperCase()}</span>
+            )}
+          </div>
+
+          {/* Uploading spinner overlay */}
+          {avatarUploading && (
+            <div className="absolute inset-0 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(26,16,64,0.65)' }}>
+              <div className="w-6 h-6 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+            </div>
+          )}
+
+          {/* Camera button overlay — owner only, hidden while uploading */}
+          {isOwner && !avatarUploading && (
+            <button
+              onClick={() => avatarInputRef.current?.click()}
+              className="absolute bottom-0 right-0 w-7 h-7 rounded-full flex items-center justify-center transition-transform hover:scale-110 active:scale-95"
+              style={{ backgroundColor: '#FF2D78', border: '2px solid #1a1040' }}
+              aria-label="Foto dəyiş"
+            >
+              <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* Info */}
