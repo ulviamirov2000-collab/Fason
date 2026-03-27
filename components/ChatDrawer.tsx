@@ -54,29 +54,42 @@ export default function ChatDrawer({
 
   // Realtime subscription — filter by listing_id, client-side filter for this conversation
   useEffect(() => {
-    const channel = supabase
-      .channel(`drawer:${listingId}:${[currentUserId, sellerId].sort().join(':')}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `listing_id=eq.${listingId}` },
-        (payload) => {
-          const msg = payload.new as MessageRow
-          const relevant =
-            (msg.sender_id === currentUserId && msg.receiver_id === sellerId) ||
-            (msg.sender_id === sellerId && msg.receiver_id === currentUserId)
-          if (!relevant) return
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === msg.id)) return prev
-            return [...prev, msg]
-          })
-          if (msg.receiver_id === currentUserId) {
-            supabase.from('messages').update({ is_read: true }).eq('id', msg.id).then(() => {})
-          }
-        }
-      )
-      .subscribe()
+    const channelName = `drawer:${listingId}:${[currentUserId, sellerId].sort().join(':')}`
+    let channel: ReturnType<typeof supabase.channel> | null = null
 
-    return () => { supabase.removeChannel(channel) }
+    try {
+      channel = supabase
+        .channel(channelName)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'messages', filter: `listing_id=eq.${listingId}` },
+          (payload) => {
+            const msg = payload.new as MessageRow
+            const relevant =
+              (msg.sender_id === currentUserId && msg.receiver_id === sellerId) ||
+              (msg.sender_id === sellerId && msg.receiver_id === currentUserId)
+            if (!relevant) return
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === msg.id)) return prev
+              return [...prev, msg]
+            })
+            if (msg.receiver_id === currentUserId) {
+              supabase.from('messages').update({ is_read: true }).eq('id', msg.id).then(() => {})
+            }
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
+            console.warn('[ChatDrawer] realtime channel', status, channelName)
+          }
+        })
+    } catch (err) {
+      console.warn('[ChatDrawer] failed to create realtime channel', err)
+    }
+
+    return () => {
+      if (channel) supabase.removeChannel(channel)
+    }
   }, [listingId, currentUserId, sellerId])
 
   // Scroll to bottom when messages change

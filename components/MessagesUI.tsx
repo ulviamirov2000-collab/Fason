@@ -113,33 +113,43 @@ export default function MessagesUI({ currentUserId }: Props) {
 
   // Realtime: new message received by me
   useEffect(() => {
-    const channel = supabase
-      .channel(`inbox:${currentUserId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver_id=eq.${currentUserId}` },
-        async (payload) => {
-          const msg = payload.new as MessageRow
-          // If message is for active conversation, add it and mark read
-          const ac = activeConvRef.current
-          if (ac && ac.listingId === msg.listing_id && ac.otherUserId === msg.sender_id) {
-            setMessages((prev) => {
-              if (prev.some((m) => m.id === msg.id)) return prev
-              return [...prev, msg]
-            })
-            supabase.from('messages').update({ is_read: true }).eq('id', msg.id).then(() => {})
-          }
-          // Refresh the conversation list
-          await loadConversations()
-          // Keep active conv unread count at 0 if it was the active one
-          if (ac && ac.listingId === msg.listing_id && ac.otherUserId === msg.sender_id) {
-            setConversations((prev) => prev.map((c) => c.key === ac.key ? { ...c, unreadCount: 0 } : c))
-          }
-        }
-      )
-      .subscribe()
+    const channelName = `inbox:${currentUserId}`
+    let channel: ReturnType<typeof supabase.channel> | null = null
 
-    return () => { supabase.removeChannel(channel) }
+    try {
+      channel = supabase
+        .channel(channelName)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver_id=eq.${currentUserId}` },
+          async (payload) => {
+            const msg = payload.new as MessageRow
+            const ac = activeConvRef.current
+            if (ac && ac.listingId === msg.listing_id && ac.otherUserId === msg.sender_id) {
+              setMessages((prev) => {
+                if (prev.some((m) => m.id === msg.id)) return prev
+                return [...prev, msg]
+              })
+              supabase.from('messages').update({ is_read: true }).eq('id', msg.id).then(() => {})
+            }
+            await loadConversations()
+            if (ac && ac.listingId === msg.listing_id && ac.otherUserId === msg.sender_id) {
+              setConversations((prev) => prev.map((c) => c.key === ac.key ? { ...c, unreadCount: 0 } : c))
+            }
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
+            console.warn('[MessagesUI] realtime channel', status, channelName)
+          }
+        })
+    } catch (err) {
+      console.warn('[MessagesUI] failed to create realtime channel', err)
+    }
+
+    return () => {
+      if (channel) supabase.removeChannel(channel)
+    }
   }, [currentUserId, loadConversations])
 
   // Scroll to bottom when messages change

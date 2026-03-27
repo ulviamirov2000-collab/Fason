@@ -40,17 +40,30 @@ export default function Navbar() {
       .single()
       .then(({ data }) => setAvatarUrl(data?.avatar_url ?? null))
 
-    const channel = supabase
-      .channel(`navbar-avatar:${user.id}`)
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'users',
-        filter: `id=eq.${user.id}`,
-      }, (payload) => { setAvatarUrl(payload.new.avatar_url ?? null) })
-      .subscribe()
+    const channelName = `navbar-avatar:${user.id}`
+    let channel: ReturnType<typeof supabase.channel> | null = null
 
-    return () => { supabase.removeChannel(channel) }
+    try {
+      channel = supabase
+        .channel(channelName)
+        .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'users',
+          filter: `id=eq.${user.id}`,
+        }, (payload) => { setAvatarUrl(payload.new.avatar_url ?? null) })
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
+            console.warn('[Navbar] avatar channel', status, channelName)
+          }
+        })
+    } catch (err) {
+      console.warn('[Navbar] failed to create avatar channel', err)
+    }
+
+    return () => {
+      if (channel) supabase.removeChannel(channel)
+    }
   }, [user])
 
   // Unread message count
@@ -68,23 +81,36 @@ export default function Navbar() {
 
     fetchCount()
 
-    const channel = supabase
-      .channel(`navbar-unread:${user.id}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-        filter: `receiver_id=eq.${user.id}`,
-      }, () => { setUnreadCount((n) => n + 1) })
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'messages',
-        filter: `receiver_id=eq.${user.id}`,
-      }, () => { fetchCount() })
-      .subscribe()
+    const channelName = `navbar-unread:${user.id}`
+    let channel: ReturnType<typeof supabase.channel> | null = null
 
-    return () => { supabase.removeChannel(channel) }
+    try {
+      channel = supabase
+        .channel(channelName)
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `receiver_id=eq.${user.id}`,
+        }, () => { setUnreadCount((n) => n + 1) })
+        .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `receiver_id=eq.${user.id}`,
+        }, () => { fetchCount() })
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
+            console.warn('[Navbar] unread channel', status, channelName)
+          }
+        })
+    } catch (err) {
+      console.warn('[Navbar] failed to create unread channel', err)
+    }
+
+    return () => {
+      if (channel) supabase.removeChannel(channel)
+    }
   }, [user])
 
   // Close dropdown when clicking outside
