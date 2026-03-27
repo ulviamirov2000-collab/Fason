@@ -17,10 +17,24 @@ const unbounded = Unbounded({
 })
 
 export const metadata: Metadata = {
-  title: 'FASON — İkinci əl geyim bazarı',
-  description: "Dolabını pula çevir. Azerbaijan's second-hand clothing marketplace.",
-  icons: {
-    icon: '/fasonicon.png',
+  title: 'FASON — İkinci əl geyim bazarı Azərbaycanda',
+  description: 'Azərbaycanda ikinci əl geyim, ayaqqabı və aksesuar alqı-satqı platforması. Dolabını pula çevir.',
+  keywords: 'ikinci əl geyim, used clothing azerbaijan, dolap azerbaycan, fason, ikinci əl ayaqqabı bakı',
+  icons: { icon: '/fasonicon.png' },
+  openGraph: {
+    title: 'FASON — İkinci əl geyim bazarı',
+    description: 'Dolabını pula çevir. Azərbaycanda ikinci əl geyim platforması.',
+    url: 'https://fason-five.vercel.app',
+    siteName: 'FASON',
+    images: [{ url: '/fasonicon.png', width: 400, height: 400 }],
+    locale: 'az_AZ',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'FASON — İkinci əl geyim bazarı',
+    description: 'Dolabını pula çevir.',
+    images: ['/fasonicon.png'],
   },
 }
 
