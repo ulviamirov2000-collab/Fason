@@ -42,6 +42,15 @@ export type Database = {
           images: string[]
           status: 'active' | 'sold' | 'archived'
           views: number
+          basket_count: number
+          created_at: string
+        }
+      }
+      baskets: {
+        Row: {
+          id: string
+          user_id: string
+          listing_id: string
           created_at: string
         }
       }
@@ -74,3 +83,4 @@ export type Database = {
 export type UserRow = Database['public']['Tables']['users']['Row']
 export type ListingRow = Database['public']['Tables']['listings']['Row']
 export type MessageRow = Database['public']['Tables']['messages']['Row']
+export type BasketRow = Database['public']['Tables']['baskets']['Row']

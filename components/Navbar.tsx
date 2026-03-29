@@ -14,6 +14,7 @@ export default function Navbar() {
   const [user, setUser] = useState<User | null>(null)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
+  const [basketCount, setBasketCount] = useState(0)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -38,6 +39,16 @@ export default function Navbar() {
       .eq('id', user.id)
       .single()
       .then(({ data }) => setAvatarUrl(data?.avatar_url ?? null))
+  }, [user])
+
+  // Basket count: fetch once when user changes
+  useEffect(() => {
+    if (!user) { setBasketCount(0); return }
+    supabase
+      .from('baskets')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .then(({ count }) => setBasketCount(count ?? 0))
   }, [user])
 
   // Unread count: fetch once then poll every 30 s — avoids WS channel overhead
@@ -141,6 +152,25 @@ export default function Navbar() {
                   style={{ backgroundColor: '#FF2D78', border: '1.5px solid #1a1040' }}
                 >
                   {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </Link>
+
+            {/* Basket icon with count badge */}
+            <Link
+              href="/basket"
+              className="relative flex items-center justify-center w-9 h-9 rounded-full transition-colors hover:bg-white/10"
+              aria-label="Səbət"
+            >
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              {basketCount > 0 && (
+                <span
+                  className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full flex items-center justify-center text-xs font-bold text-white px-1"
+                  style={{ backgroundColor: '#FF2D78', border: '1.5px solid #1a1040' }}
+                >
+                  {basketCount > 9 ? '9+' : basketCount}
                 </span>
               )}
             </Link>

@@ -32,6 +32,14 @@ export default function ListingClient({ id }: { id: string }) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [chatOpen, setChatOpen] = useState(false)
 
+  // Basket state
+  const [inBasket, setInBasket] = useState(false)
+  const [basketLoading, setBasketLoading] = useState(false)
+
+  // Social proof
+  const [basketCount, setBasketCount] = useState(0)
+  const [messageCount, setMessageCount] = useState(0)
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null))
 
@@ -42,9 +50,64 @@ export default function ListingClient({ id }: { id: string }) {
       .single()
       .then(({ data }) => {
         setListing(data as FullListing)
+        setBasketCount((data as FullListing)?.basket_count ?? 0)
         setLoading(false)
       })
+
+    // Message count for this listing
+    supabase
+      .from('messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('listing_id', id)
+      .then(({ count }) => setMessageCount(count ?? 0))
   }, [id])
+
+  // Check if current user has this in their basket
+  useEffect(() => {
+    if (!currentUserId) { setInBasket(false); return }
+    supabase
+      .from('baskets')
+      .select('id')
+      .eq('user_id', currentUserId)
+      .eq('listing_id', id)
+      .maybeSingle()
+      .then(({ data }) => setInBasket(!!data))
+  }, [currentUserId, id])
+
+  async function toggleBasket() {
+    if (!currentUserId) { router.push('/auth'); return }
+    setBasketLoading(true)
+
+    if (inBasket) {
+      await supabase
+        .from('baskets')
+        .delete()
+        .eq('user_id', currentUserId)
+        .eq('listing_id', id)
+
+      await supabase
+        .from('listings')
+        .update({ basket_count: Math.max(0, basketCount - 1) })
+        .eq('id', id)
+
+      setInBasket(false)
+      setBasketCount((c) => Math.max(0, c - 1))
+    } else {
+      await supabase
+        .from('baskets')
+        .insert({ user_id: currentUserId, listing_id: id })
+
+      await supabase
+        .from('listings')
+        .update({ basket_count: basketCount + 1 })
+        .eq('id', id)
+
+      setInBasket(true)
+      setBasketCount((c) => c + 1)
+    }
+
+    setBasketLoading(false)
+  }
 
   if (loading) {
     return (
@@ -72,6 +135,12 @@ export default function ListingClient({ id }: { id: string }) {
   const hasImages = listing.images && listing.images.length > 0
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const subcategory: string | null = (listing as any).subcategory ?? null
+
+  // Build social proof string
+  const socialParts: string[] = []
+  if ((listing.views ?? 0) > 0) socialParts.push(`👁 ${listing.views} baxış`)
+  if (basketCount > 0) socialParts.push(`🛒 ${basketCount} səbətdə`)
+  if (messageCount > 0) socialParts.push(`💬 ${messageCount} təklif`)
 
   return (
     <>
@@ -140,6 +209,11 @@ export default function ListingClient({ id }: { id: string }) {
               </div>
             </div>
 
+            {/* Social proof */}
+            {socialParts.length > 0 && (
+              <p className="text-xs text-gray-400">{socialParts.join(' · ')}</p>
+            )}
+
             {/* Chips */}
             <div className="flex flex-wrap gap-2">
               {listing.brand && (
@@ -170,9 +244,6 @@ export default function ListingClient({ id }: { id: string }) {
             {listing.description_az && (
               <p className="text-sm text-gray-700 leading-relaxed">{listing.description_az}</p>
             )}
-
-            {/* Views */}
-            <p className="text-xs text-gray-400">👁 {listing.views} baxış</p>
 
             {/* Seller card */}
             {seller && (
@@ -220,10 +291,12 @@ export default function ListingClient({ id }: { id: string }) {
                 </button>
               )}
               <button
-                className="w-full py-3.5 rounded-2xl font-bold text-center transition-all hover:bg-gray-50"
+                onClick={toggleBasket}
+                disabled={basketLoading}
+                className="w-full py-3.5 rounded-2xl font-bold text-center transition-all hover:bg-gray-50 disabled:opacity-60"
                 style={{ border: '2px solid #1a1040', color: '#1a1040', boxShadow: '3px 3px 0 #1a1040' }}
               >
-                🤍 Bəyən
+                {inBasket ? '🛒 Səbətdən çıxar' : '🛒 Səbətə at'}
               </button>
             </div>
           </div>

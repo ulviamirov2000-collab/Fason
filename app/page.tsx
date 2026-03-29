@@ -29,6 +29,8 @@ function toCard(
     images: l.images,
     seller,
     rotation: ROTATIONS[index % ROTATIONS.length],
+    views: l.views,
+    basket_count: l.basket_count,
   }
 }
 

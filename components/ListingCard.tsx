@@ -17,6 +17,8 @@ export type MockListing = {
     avatar_url?: string | null
   }
   rotation?: number
+  views?: number
+  basket_count?: number
 }
 
 const conditionConfig = {
@@ -128,6 +130,14 @@ export default function ListingCard({
               )}
             </button>
           </div>
+
+          {/* Stats */}
+          {((listing.views ?? 0) > 0 || (listing.basket_count ?? 0) > 0) && (
+            <div className="flex items-center gap-2 mt-1.5 text-[10px] text-gray-400">
+              {(listing.views ?? 0) > 0 && <span>👁 {listing.views}</span>}
+              {(listing.basket_count ?? 0) > 0 && <span>🛒 {listing.basket_count}</span>}
+            </div>
+          )}
         </div>
       </div>
     </Link>
