@@ -139,6 +139,7 @@ export default function MessagesUI({ currentUserId }: Props) {
           }
         )
         .subscribe((status) => {
+          if (status === 'SUBSCRIBED') return
           if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
             console.warn('[MessagesUI] realtime channel', status, channelName)
           }

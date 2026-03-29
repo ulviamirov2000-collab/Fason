@@ -29,44 +29,18 @@ export default function Navbar() {
     return () => subscription.unsubscribe()
   }, [])
 
-  // Fetch avatar + subscribe to profile updates
+  // Fetch avatar once when user changes — no realtime needed in navbar
   useEffect(() => {
     if (!user) { setAvatarUrl(null); return }
-
     supabase
       .from('users')
       .select('avatar_url')
       .eq('id', user.id)
       .single()
       .then(({ data }) => setAvatarUrl(data?.avatar_url ?? null))
-
-    const channelName = `navbar-avatar:${user.id}`
-    let channel: ReturnType<typeof supabase.channel> | null = null
-
-    try {
-      channel = supabase
-        .channel(channelName)
-        .on('postgres_changes', {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'users',
-          filter: `id=eq.${user.id}`,
-        }, (payload) => { setAvatarUrl(payload.new.avatar_url ?? null) })
-        .subscribe((status) => {
-          if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
-            console.warn('[Navbar] avatar channel', status, channelName)
-          }
-        })
-    } catch (err) {
-      console.warn('[Navbar] failed to create avatar channel', err)
-    }
-
-    return () => {
-      if (channel) supabase.removeChannel(channel)
-    }
   }, [user])
 
-  // Unread message count
+  // Unread count: fetch once then poll every 30 s — avoids WS channel overhead
   useEffect(() => {
     if (!user) { setUnreadCount(0); return }
 
@@ -80,37 +54,8 @@ export default function Navbar() {
     }
 
     fetchCount()
-
-    const channelName = `navbar-unread:${user.id}`
-    let channel: ReturnType<typeof supabase.channel> | null = null
-
-    try {
-      channel = supabase
-        .channel(channelName)
-        .on('postgres_changes', {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `receiver_id=eq.${user.id}`,
-        }, () => { setUnreadCount((n) => n + 1) })
-        .on('postgres_changes', {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'messages',
-          filter: `receiver_id=eq.${user.id}`,
-        }, () => { fetchCount() })
-        .subscribe((status) => {
-          if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
-            console.warn('[Navbar] unread channel', status, channelName)
-          }
-        })
-    } catch (err) {
-      console.warn('[Navbar] failed to create unread channel', err)
-    }
-
-    return () => {
-      if (channel) supabase.removeChannel(channel)
-    }
+    const interval = setInterval(fetchCount, 30_000)
+    return () => clearInterval(interval)
   }, [user])
 
   // Close dropdown when clicking outside

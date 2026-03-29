@@ -82,6 +82,7 @@ export default function ChatDrawer({
           }
         )
         .subscribe((status) => {
+          if (status === 'SUBSCRIBED') return
           if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
             console.warn('[ChatDrawer] realtime channel', status, channelName)
           }
