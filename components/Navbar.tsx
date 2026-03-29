@@ -41,14 +41,21 @@ export default function Navbar() {
       .then(({ data }) => setAvatarUrl(data?.avatar_url ?? null))
   }, [user])
 
-  // Basket count: fetch once when user changes
+  // Basket count: fetch on user change + listen for basket-changed custom event
   useEffect(() => {
     if (!user) { setBasketCount(0); return }
-    supabase
-      .from('baskets')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .then(({ count }) => setBasketCount(count ?? 0))
+
+    function fetchBasketCount() {
+      supabase
+        .from('baskets')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user!.id)
+        .then(({ count }) => setBasketCount(count ?? 0))
+    }
+
+    fetchBasketCount()
+    window.addEventListener('basket-changed', fetchBasketCount)
+    return () => window.removeEventListener('basket-changed', fetchBasketCount)
   }, [user])
 
   // Unread count: fetch once then poll every 30 s — avoids WS channel overhead

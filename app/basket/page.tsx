@@ -112,6 +112,7 @@ export default function BasketPage() {
     }
 
     setItems((prev) => prev.filter((x) => x.basket_id !== item.basket_id))
+    window.dispatchEvent(new CustomEvent('basket-changed'))
     setRemoving(null)
   }
 

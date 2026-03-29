@@ -106,6 +106,7 @@ export default function ListingClient({ id }: { id: string }) {
       setBasketCount((c) => c + 1)
     }
 
+    window.dispatchEvent(new CustomEvent('basket-changed'))
     setBasketLoading(false)
   }
 
