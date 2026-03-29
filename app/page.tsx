@@ -36,14 +36,18 @@ export default function HomePage() {
   const [listings, setListings] = useState<MockListing[]>([])
   const [loading, setLoading] = useState(true)
 
-  // ── Filter state (all lifted here so we can build the Supabase query) ──
-  const [filterCategory, setFilterCategory] = useState<string | null>(null)
+  // ── Filter state ──────────────────────────────────────────────────────────
+  const [filterCategory,    setFilterCategory]    = useState<string | null>(null)
   const [filterSubcategory, setFilterSubcategory] = useState<string | null>(null)
-  const [filterSize, setFilterSize] = useState<string | null>(null)
-  const [filterCondition, setFilterCondition] = useState(0)
-  const [filterSort, setFilterSort] = useState('newest')
+  const [filterBrand,       setFilterBrand]       = useState('')
+  const [filterPriceMin,    setFilterPriceMin]     = useState('')
+  const [filterPriceMax,    setFilterPriceMax]     = useState('')
+  const [filterSizes,       setFilterSizes]        = useState<string[]>([])
+  const [filterColors,      setFilterColors]       = useState<string[]>([])
+  const [filterCondition,   setFilterCondition]   = useState(0)
+  const [filterSort,        setFilterSort]         = useState('newest')
 
-  // ── Fetch listings whenever any filter changes ──
+  // ── Fetch listings whenever any filter changes ─────────────────────────────
   const fetchListings = useCallback(async () => {
     setLoading(true)
 
@@ -53,9 +57,13 @@ export default function HomePage() {
       .select('*, users:seller_id(full_name, email, avatar_url)')
       .eq('status', 'active')
 
-    if (filterCategory) query = query.eq('category', filterCategory)
-    if (filterSubcategory) query = query.eq('subcategory', filterSubcategory)
-    if (filterSize) query = query.eq('size', filterSize)
+    if (filterCategory)     query = query.eq('category', filterCategory)
+    if (filterSubcategory)  query = query.eq('subcategory', filterSubcategory)
+    if (filterBrand)        query = query.ilike('brand', `%${filterBrand}%`)
+    if (filterPriceMin)     query = query.gte('price', parseFloat(filterPriceMin))
+    if (filterPriceMax)     query = query.lte('price', parseFloat(filterPriceMax))
+    if (filterSizes.length) query = query.in('size', filterSizes)
+    if (filterColors.length) query = query.in('color', filterColors)
     if (filterCondition > 0) query = query.eq('condition', CONDITION_VALUES[filterCondition])
 
     switch (filterSort) {
@@ -85,7 +93,7 @@ export default function HomePage() {
       setListings([])
     }
     setLoading(false)
-  }, [filterCategory, filterSubcategory, filterSize, filterCondition, filterSort])
+  }, [filterCategory, filterSubcategory, filterBrand, filterPriceMin, filterPriceMax, filterSizes, filterColors, filterCondition, filterSort])
 
   useEffect(() => { fetchListings() }, [fetchListings])
 
@@ -93,26 +101,26 @@ export default function HomePage() {
   function handleCategoryNavSelect(cat: string | null, sub: string | null) {
     setFilterCategory(cat)
     setFilterSubcategory(sub)
-    setFilterSize(null)
+    setFilterSizes([])
   }
 
   // ── SearchBar handlers ──
   function handleSearchSelect(sub: string, cat: string) {
     setFilterSubcategory(sub)
     setFilterCategory(cat)
-    setFilterSize(null)
+    setFilterSizes([])
   }
 
   function handleSearchClear() {
     setFilterSubcategory(null)
   }
 
-  // Sizes available for the current filter state
+  // Sizes shown in the Ölçü dropdown — context-aware
   const availableSizes = filterSubcategory
     ? (SIZES_BY_SUBCATEGORY[filterSubcategory] ?? DEFAULT_SIZES)
     : filterCategory
     ? (FILTER_SIZES_BY_CATEGORY[filterCategory] ?? DEFAULT_SIZES)
-    : DEFAULT_SIZES
+    : []
 
   // Heading reflects active filter
   const headingLabel = filterSubcategory
@@ -189,13 +197,20 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Filter bar — sizes, condition, sort only */}
+        {/* Filter bar — dropdown style */}
         <FilterBar
           availableSizes={availableSizes}
-          size={filterSize}
+          brand={filterBrand}
+          priceMin={filterPriceMin}
+          priceMax={filterPriceMax}
+          sizes={filterSizes}
+          colors={filterColors}
           condition={filterCondition}
           sort={filterSort}
-          onSizeChange={setFilterSize}
+          onBrandChange={setFilterBrand}
+          onPriceChange={(min, max) => { setFilterPriceMin(min); setFilterPriceMax(max) }}
+          onSizesChange={setFilterSizes}
+          onColorsChange={setFilterColors}
           onConditionChange={setFilterCondition}
           onSortChange={setFilterSort}
         />
@@ -233,7 +248,11 @@ export default function HomePage() {
               onClick={() => {
                 setFilterCategory(null)
                 setFilterSubcategory(null)
-                setFilterSize(null)
+                setFilterBrand('')
+                setFilterPriceMin('')
+                setFilterPriceMax('')
+                setFilterSizes([])
+                setFilterColors([])
                 setFilterCondition(0)
                 setFilterSort('newest')
               }}
