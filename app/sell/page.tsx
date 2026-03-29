@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Image from 'next/image'
 import CameraCapture, { type PhotoEntry } from '@/components/CameraCapture'
-import { CATEGORIES, CATEGORY_EMOJIS, SUBCATEGORIES, SIZES_BY_SUBCATEGORY, DEFAULT_SIZES } from '@/lib/sizes'
+import { CATEGORIES, SUBCATEGORIES, SIZES_BY_SUBCATEGORY, DEFAULT_SIZES, CATEGORY_EMOJIS } from '@/lib/sizes'
 import { sanitize } from '@/lib/sanitize'
 
 const steps = ['Foto', 'Məlumat', 'Qiymət', 'Yayımla']
@@ -14,6 +14,25 @@ const conditions = [
   { value: 'new', label: 'Yeni', color: '#00E5CC', desc: 'Heç geyilməyib, etiket üstündə ola bilər' },
   { value: 'good', label: 'Yaxşı', color: '#FF9500', desc: 'Az istifadə edilib, əla vəziyyətdə' },
   { value: 'fair', label: 'Orta', color: '#FF2D78', desc: 'İstifadə izləri var amma sağlamdır' },
+]
+
+const COLORS: { name: string; hex: string; border?: boolean }[] = [
+  { name: 'Ağ',        hex: '#FFFFFF', border: true },
+  { name: 'Qara',      hex: '#000000' },
+  { name: 'Boz',       hex: '#9E9E9E' },
+  { name: 'Bej',       hex: '#C8A882' },
+  { name: 'Qəhvəyi',   hex: '#795548' },
+  { name: 'Qırmızı',   hex: '#F44336' },
+  { name: 'Narıncı',   hex: '#FF9800' },
+  { name: 'Sarı',      hex: '#FFEB3B' },
+  { name: 'Yaşıl',     hex: '#4CAF50' },
+  { name: 'Mavi',      hex: '#2196F3' },
+  { name: 'Göy',       hex: '#00BCD4' },
+  { name: 'Bənövşəyi', hex: '#9C27B0' },
+  { name: 'Çəhrayı',   hex: '#E91E63' },
+  { name: 'Qızılı',    hex: '#FFD700' },
+  { name: 'Gümüşü',    hex: '#C0C0C0' },
+  { name: 'Çoxrəngli', hex: 'rainbow' },
 ]
 
 export default function SellPage() {
@@ -45,6 +64,7 @@ export default function SellPage() {
     description_az: '',
     category: '',
     subcategory: '',
+    color: '',
     size: '',
     brand: '',
     condition: '',
@@ -76,7 +96,7 @@ export default function SellPage() {
     setSubOpen(false)
   }
 
-  const step1Valid = !!(form.gender && form.category && form.subcategory && form.condition)
+  const step1Valid = !!(form.gender && form.category && form.subcategory && form.color && form.condition)
 
   async function publishListing() {
     if (!userId) { setPublishError('İstifadəçi tapılmadı. Yenidən daxil olun.'); return }
@@ -112,6 +132,7 @@ export default function SellPage() {
       price: parseFloat(form.price),
       category: form.category || null,
       subcategory: form.subcategory || null,
+      color: form.color || null,
       size: form.size || null,
       brand: sanitize(form.brand) || null,
       condition: form.condition as 'new' | 'good' | 'fair',
@@ -134,6 +155,10 @@ export default function SellPage() {
 
   const inputClass = 'w-full px-4 py-3 rounded-xl text-sm outline-none'
   const inputStyle = { border: '2px solid #1a1040', backgroundColor: 'white' }
+
+  // Chip button style helpers
+  const chipSelected = { backgroundColor: '#FF2D78', border: '2px solid #1a1040', color: 'white' }
+  const chipDefault  = { backgroundColor: 'white',   border: '2px solid #1a1040', color: '#1a1040' }
 
   return (
     <main className="min-h-screen px-4 py-10 max-w-2xl mx-auto">
@@ -210,69 +235,47 @@ export default function SellPage() {
             onChange={(e) => update('brand', e.target.value)}
           />
 
-          {/* ── Gender selector ── */}
+          {/* ── Gender chips ── */}
           <div>
-            <p className="text-sm font-semibold mb-3" style={{ color: '#1a1040' }}>
+            <p className="text-sm font-semibold mb-2" style={{ color: '#1a1040' }}>
               Kimə aiddir <span style={{ color: '#FF2D78' }}>*</span>
             </p>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="flex flex-wrap gap-2">
               {[
-                { value: 'qadin', label: 'Qadın', emoji: '👩' },
-                { value: 'kisi',  label: 'Kişi',  emoji: '👨' },
-                { value: 'usaq',  label: 'Uşaq',  emoji: '🧒' },
-                { value: 'el',    label: 'Əl işi', emoji: '🧶' },
+                { value: 'qadin', label: 'Qadın' },
+                { value: 'kisi',  label: 'Kişi'  },
+                { value: 'usaq',  label: 'Uşaq'  },
+                { value: 'el',    label: 'Əl işi' },
               ].map((g) => (
                 <button
                   key={g.value}
                   onClick={() => {
-                    update('gender', g.value)
-                    // Reset category when gender changes
                     setForm((f) => ({ ...f, gender: g.value, category: '', subcategory: '', size: '' }))
                     setSubSearch('')
                   }}
-                  className="flex flex-col items-center justify-center gap-1.5 py-4 px-2 rounded-2xl transition-all hover:scale-[1.02] active:scale-[0.98]"
-                  style={
-                    form.gender === g.value
-                      ? { backgroundColor: '#1a1040', border: '2px solid #1a1040', boxShadow: '3px 3px 0 #FF2D78' }
-                      : { backgroundColor: 'white', border: '2px solid #ccc' }
-                  }
+                  className="px-4 py-2 rounded-full text-sm font-semibold transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  style={form.gender === g.value ? chipSelected : chipDefault}
                 >
-                  <span className="text-2xl">{g.emoji}</span>
-                  <span
-                    className="text-xs font-semibold text-center leading-tight"
-                    style={{ color: form.gender === g.value ? 'white' : '#1a1040' }}
-                  >
-                    {g.label}
-                  </span>
+                  {g.label}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* ── Category cards ── */}
+          {/* ── Category chips ── */}
           <div>
-            <p className="text-sm font-semibold mb-3" style={{ color: '#1a1040' }}>
+            <p className="text-sm font-semibold mb-2" style={{ color: '#1a1040' }}>
               Kateqoriya <span style={{ color: '#FF2D78' }}>*</span>
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="flex flex-wrap gap-2">
               {CATEGORIES.map((cat) => (
                 <button
                   key={cat}
                   onClick={() => selectCategory(cat)}
-                  className="flex flex-col items-center justify-center gap-1.5 py-4 px-2 rounded-2xl transition-all hover:scale-[1.02] active:scale-[0.98]"
-                  style={
-                    form.category === cat
-                      ? { backgroundColor: '#FF2D78', border: '2px solid #1a1040', boxShadow: '3px 3px 0 #1a1040' }
-                      : { backgroundColor: 'white', border: '2px solid #ccc' }
-                  }
+                  className="px-4 py-2 rounded-full text-sm font-semibold transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  style={form.category === cat ? chipSelected : chipDefault}
                 >
-                  <span className="text-2xl">{CATEGORY_EMOJIS[cat]}</span>
-                  <span
-                    className="text-xs font-semibold text-center leading-tight"
-                    style={{ color: form.category === cat ? 'white' : '#1a1040' }}
-                  >
-                    {cat}
-                  </span>
+                  {cat}
                 </button>
               ))}
             </div>
@@ -347,6 +350,44 @@ export default function SellPage() {
             </div>
           )}
 
+          {/* ── Color picker ── */}
+          {form.subcategory && (
+            <div>
+              <p className="text-sm font-semibold mb-3" style={{ color: '#1a1040' }}>
+                Rəng <span style={{ color: '#FF2D78' }}>*</span>
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {COLORS.map((c) => {
+                  const selected = form.color === c.name
+                  return (
+                    <button
+                      key={c.name}
+                      onClick={() => update('color', selected ? '' : c.name)}
+                      title={c.name}
+                      className="w-10 h-10 rounded-full flex-shrink-0 transition-transform hover:scale-110 active:scale-95"
+                      style={{
+                        background: c.hex === 'rainbow'
+                          ? 'conic-gradient(red, orange, yellow, green, cyan, blue, violet, red)'
+                          : c.hex,
+                        border: selected
+                          ? '3px solid #FF2D78'
+                          : c.border
+                          ? '2px solid #ccc'
+                          : '2px solid transparent',
+                        boxShadow: selected ? '0 0 0 2px white, 0 0 0 4px #FF2D78' : undefined,
+                      }}
+                    />
+                  )
+                })}
+              </div>
+              {form.color && (
+                <p className="mt-2 text-xs font-semibold" style={{ color: '#FF2D78' }}>
+                  ✓ {form.color}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* ── Size chips ── */}
           {form.subcategory && (
             <div>
@@ -400,7 +441,11 @@ export default function SellPage() {
           {/* Validation hint */}
           {!step1Valid && (
             <p className="text-xs text-gray-400">
-              {!form.category ? '↑ Kateqoriya seçilməlidir' : !form.subcategory ? '↑ Növ seçilməlidir' : '↑ Vəziyyət seçilməlidir'}
+              {!form.gender ? '↑ Kimə aid olduğu seçilməlidir'
+                : !form.category ? '↑ Kateqoriya seçilməlidir'
+                : !form.subcategory ? '↑ Növ seçilməlidir'
+                : !form.color ? '↑ Rəng seçilməlidir'
+                : '↑ Vəziyyət seçilməlidir'}
             </p>
           )}
         </div>
@@ -461,6 +506,9 @@ export default function SellPage() {
                 >
                   {form.size}
                 </span>
+              )}
+              {form.color && (
+                <span className="text-xs text-gray-500">{form.color}</span>
               )}
             </div>
           )}
