@@ -39,6 +39,7 @@ export default function SellPage() {
   const [photos, setPhotos] = useState<PhotoEntry[]>([])
 
   const [form, setForm] = useState({
+    gender: '',
     title_az: '',
     title_ru: '',
     description_az: '',
@@ -75,7 +76,7 @@ export default function SellPage() {
     setSubOpen(false)
   }
 
-  const step1Valid = !!(form.category && form.subcategory && form.condition)
+  const step1Valid = !!(form.gender && form.category && form.subcategory && form.condition)
 
   async function publishListing() {
     if (!userId) { setPublishError('İstifadəçi tapılmadı. Yenidən daxil olun.'); return }
@@ -104,6 +105,7 @@ export default function SellPage() {
 
     const payload = {
       seller_id: userId,
+      gender: form.gender || null,
       title_az: sanitize(form.title_az),
       title_ru: sanitize(form.title_ru) || sanitize(form.title_az),
       description_az: sanitize(form.description_az) || null,
@@ -207,6 +209,45 @@ export default function SellPage() {
             value={form.brand}
             onChange={(e) => update('brand', e.target.value)}
           />
+
+          {/* ── Gender selector ── */}
+          <div>
+            <p className="text-sm font-semibold mb-3" style={{ color: '#1a1040' }}>
+              Kimə aiddir <span style={{ color: '#FF2D78' }}>*</span>
+            </p>
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { value: 'qadin', label: 'Qadın', emoji: '👩' },
+                { value: 'kisi',  label: 'Kişi',  emoji: '👨' },
+                { value: 'usaq',  label: 'Uşaq',  emoji: '🧒' },
+                { value: 'el',    label: 'Əl işi', emoji: '🧶' },
+              ].map((g) => (
+                <button
+                  key={g.value}
+                  onClick={() => {
+                    update('gender', g.value)
+                    // Reset category when gender changes
+                    setForm((f) => ({ ...f, gender: g.value, category: '', subcategory: '', size: '' }))
+                    setSubSearch('')
+                  }}
+                  className="flex flex-col items-center justify-center gap-1.5 py-4 px-2 rounded-2xl transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  style={
+                    form.gender === g.value
+                      ? { backgroundColor: '#1a1040', border: '2px solid #1a1040', boxShadow: '3px 3px 0 #FF2D78' }
+                      : { backgroundColor: 'white', border: '2px solid #ccc' }
+                  }
+                >
+                  <span className="text-2xl">{g.emoji}</span>
+                  <span
+                    className="text-xs font-semibold text-center leading-tight"
+                    style={{ color: form.gender === g.value ? 'white' : '#1a1040' }}
+                  >
+                    {g.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* ── Category cards ── */}
           <div>

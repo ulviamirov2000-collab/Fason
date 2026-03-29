@@ -9,6 +9,18 @@ Object.entries(SUBCATEGORIES).forEach(([cat, subs]) => {
   subs.forEach((sub) => { SUB_TO_FILTER_CAT[sub] = cat })
 })
 
+// filterCategory → mega menu left column label
+const CAT_TO_MEGA_LEFT: Record<string, string> = {
+  'Üst geyim':                'Geyim',
+  'Alt geyim':                'Geyim',
+  'Bütöv geyim':              'Geyim',
+  'Ayaqqabı':                 'Ayaqqabı',
+  'Çanta':                    'Çanta',
+  'Aksesuar':                 'Aksesuar',
+  'İdman geyimi':             'İdman geyimi',
+  'Alt paltarı və ev geyimi': 'Alt paltarı',
+}
+
 // ─── Static mega menu data ────────────────────────────────────────────────────
 
 const TABS = [
@@ -62,12 +74,18 @@ const EL_SUBS = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 type Props = {
-  onSelect: (category: string | null, subcategory: string | null) => void
+  onSelect:        (category: string | null, subcategory: string | null) => void
+  onGenderChange:  (gender: string) => void
+  activeCategory:  string | null
+  activeSubcategory: string | null
 }
 
-export default function CategoryNav({ onSelect }: Props) {
+export default function CategoryNav({ onSelect, onGenderChange, activeCategory, activeSubcategory }: Props) {
   const [activeTab, setActiveTab]     = useState('qadin')
-  const [hoveredLeft, setHoveredLeft] = useState('Geyim')
+  // Default hoveredLeft tracks the active category or falls back to 'Geyim'
+  const [hoveredLeft, setHoveredLeft] = useState(
+    () => (activeCategory ? (CAT_TO_MEGA_LEFT[activeCategory] ?? 'Geyim') : 'Geyim')
+  )
   const [megaOpen, setMegaOpen]       = useState(false)
   const [mobileOpen, setMobileOpen]   = useState(false)
   const [mobileCat, setMobileCat]     = useState<string | null>(null)
@@ -105,9 +123,18 @@ export default function CategoryNav({ onSelect }: Props) {
 
   const currentSubs = isEl ? null : MEGA_SUBS[hoveredLeft]
 
-  // ── Sub-button shared styles ──────────────────────────────────────────────
-  const subBtn =
-    'text-left text-sm py-1.5 transition-colors hover:text-[#FF2D78] whitespace-nowrap'
+  // Active left column label derived from parent's activeCategory
+  const activeMegaLeft = activeCategory ? (CAT_TO_MEGA_LEFT[activeCategory] ?? null) : null
+
+  // Sub-button style — highlighted if it's the active subcategory
+  function subStyle(sub: string): React.CSSProperties {
+    return {
+      color: sub === activeSubcategory ? '#FF2D78' : '#1a1040',
+      fontWeight: sub === activeSubcategory ? 600 : 400,
+    }
+  }
+
+  const subBtn = 'text-left text-sm py-1.5 transition-colors hover:text-[#FF2D78] whitespace-nowrap'
 
   return (
     <>
@@ -131,16 +158,24 @@ export default function CategoryNav({ onSelect }: Props) {
               onMouseEnter={() => {
                 setActiveTab(tab.key)
                 setMegaOpen(true)
-                setHoveredLeft(tab.key === 'el' ? 'Əl işi' : 'Geyim')
+                if (tab.key === 'el') {
+                  setHoveredLeft('Əl işi')
+                } else {
+                  setHoveredLeft(activeCategory ? (CAT_TO_MEGA_LEFT[activeCategory] ?? 'Geyim') : 'Geyim')
+                }
               }}
               onClick={() => {
                 const same = activeTab === tab.key
                 setActiveTab(tab.key)
-                setHoveredLeft(tab.key === 'el' ? 'Əl işi' : 'Geyim')
-                // Desktop: toggle; Mobile: open drawer
+                if (tab.key === 'el') {
+                  setHoveredLeft('Əl işi')
+                } else {
+                  setHoveredLeft(activeCategory ? (CAT_TO_MEGA_LEFT[activeCategory] ?? 'Geyim') : 'Geyim')
+                }
                 setMegaOpen(!same || !megaOpen)
                 setMobileOpen(true)
                 setMobileCat(null)
+                onGenderChange(tab.key)
               }}
             >
               {tab.label}
@@ -178,14 +213,14 @@ export default function CategoryNav({ onSelect }: Props) {
                   <div className="flex gap-16">
                     <div className="flex flex-col gap-0.5">
                       {EL_SUBS.col1.map((sub) => (
-                        <button key={sub} onClick={() => handleSubClick(sub)} className={subBtn} style={{ color: '#1a1040' }}>
+                        <button key={sub} onClick={() => handleSubClick(sub)} className={subBtn} style={subStyle(sub)}>
                           {sub}
                         </button>
                       ))}
                     </div>
                     <div className="flex flex-col gap-0.5">
                       {EL_SUBS.col2.map((sub) => (
-                        <button key={sub} onClick={() => handleSubClick(sub)} className={subBtn} style={{ color: '#1a1040' }}>
+                        <button key={sub} onClick={() => handleSubClick(sub)} className={subBtn} style={subStyle(sub)}>
                           {sub}
                         </button>
                       ))}
@@ -204,21 +239,25 @@ export default function CategoryNav({ onSelect }: Props) {
                 <div className="flex">
                   {/* Left column */}
                   <div className="w-52 flex-shrink-0 border-r border-gray-100 pr-2">
-                    {MEGA_LEFT.map((item) => (
-                      <button
-                        key={item.label}
-                        onMouseEnter={() => setHoveredLeft(item.label)}
-                        onClick={() => handleShowAll(item.filterKey)}
-                        className="w-full text-left px-4 py-2.5 text-sm transition-all"
-                        style={{
-                          color:       hoveredLeft === item.label ? '#FF2D78' : '#1a1040',
-                          fontWeight:  hoveredLeft === item.label ? 700 : 500,
-                          borderLeft: `3px solid ${hoveredLeft === item.label ? '#FF2D78' : 'transparent'}`,
-                        }}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
+                    {MEGA_LEFT.map((item) => {
+                      const isHovered = hoveredLeft === item.label
+                      const isActive  = activeMegaLeft === item.label
+                      return (
+                        <button
+                          key={item.label}
+                          onMouseEnter={() => setHoveredLeft(item.label)}
+                          onClick={() => handleShowAll(item.filterKey)}
+                          className="w-full text-left px-4 py-2.5 text-sm transition-all"
+                          style={{
+                            color:      isHovered || isActive ? '#FF2D78' : '#1a1040',
+                            fontWeight: isHovered || isActive ? 700 : 500,
+                            borderLeft: `3px solid ${isHovered || isActive ? '#FF2D78' : 'transparent'}`,
+                          }}
+                        >
+                          {item.label}
+                        </button>
+                      )
+                    })}
                   </div>
 
                   {/* Right area — 2-col grid of subcategories */}
@@ -228,14 +267,14 @@ export default function CategoryNav({ onSelect }: Props) {
                         <div className="flex gap-16">
                           <div className="flex flex-col gap-0.5">
                             {currentSubs.col1.map((sub) => (
-                              <button key={sub} onClick={() => handleSubClick(sub)} className={subBtn} style={{ color: '#1a1040' }}>
+                              <button key={sub} onClick={() => handleSubClick(sub)} className={subBtn} style={subStyle(sub)}>
                                 {sub}
                               </button>
                             ))}
                           </div>
                           <div className="flex flex-col gap-0.5">
                             {currentSubs.col2.map((sub) => (
-                              <button key={sub} onClick={() => handleSubClick(sub)} className={subBtn} style={{ color: '#1a1040' }}>
+                              <button key={sub} onClick={() => handleSubClick(sub)} className={subBtn} style={subStyle(sub)}>
                                 {sub}
                               </button>
                             ))}

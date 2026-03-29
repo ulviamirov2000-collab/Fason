@@ -5,8 +5,8 @@ import { useState, useEffect, useRef } from 'react'
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const COMMON_BRANDS = [
-  'Zara', 'H&M', 'Nike', 'Adidas', 'Mango',
-  'Pull&Bear', 'Bershka', 'Reserved', 'LC Waikiki', 'Koton',
+  'Zara', 'H&M', 'Nike', 'Adidas', 'Mango', 'Pull&Bear', 'Bershka', 'Reserved', 'LC Waikiki', 'Koton',
+  'Marks&Spencer', 'DeFacto', 'Lacoste', 'Tommy Hilfiger', 'Guess', 'Calvin Klein', "Levi's", 'New Balance', 'Puma', 'Reebok',
 ]
 
 export const COLORS: { name: string; hex: string }[] = [
@@ -37,11 +37,10 @@ const SORT_OPTIONS = [
   { key: 'views',      label: 'Ən çox baxılan' },
 ]
 
-// All sizes shown when no category is selected
+// All sizes shown when no category is selected (pre-deduped)
 const ALL_SIZES = [
   'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL',
-  '34', '36', '38', '40', '42', '44',
-  '35', '37', '39', '41', '43', '45',
+  '34', '35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45',
   'Universal',
 ]
 

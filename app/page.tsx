@@ -37,6 +37,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true)
 
   // ── Filter state ──────────────────────────────────────────────────────────
+  const [activeGender,      setActiveGender]       = useState<string | null>(null)
   const [filterCategory,    setFilterCategory]    = useState<string | null>(null)
   const [filterSubcategory, setFilterSubcategory] = useState<string | null>(null)
   const [filterBrand,       setFilterBrand]       = useState('')
@@ -57,6 +58,7 @@ export default function HomePage() {
       .select('*, users:seller_id(full_name, email, avatar_url)')
       .eq('status', 'active')
 
+    if (activeGender)       query = query.eq('gender', activeGender)
     if (filterCategory)     query = query.eq('category', filterCategory)
     if (filterSubcategory)  query = query.eq('subcategory', filterSubcategory)
     if (filterBrand)        query = query.ilike('brand', `%${filterBrand}%`)
@@ -93,11 +95,24 @@ export default function HomePage() {
       setListings([])
     }
     setLoading(false)
-  }, [filterCategory, filterSubcategory, filterBrand, filterPriceMin, filterPriceMax, filterSizes, filterColors, filterCondition, filterSort])
+  }, [activeGender, filterCategory, filterSubcategory, filterBrand, filterPriceMin, filterPriceMax, filterSizes, filterColors, filterCondition, filterSort])
 
   useEffect(() => { fetchListings() }, [fetchListings])
 
-  // ── CategoryNav handler ──
+  // ── Gender tab change — resets all subordinate filters ──
+  function handleGenderChange(gender: string) {
+    setActiveGender(gender)
+    setFilterCategory(null)
+    setFilterSubcategory(null)
+    setFilterBrand('')
+    setFilterPriceMin('')
+    setFilterPriceMax('')
+    setFilterSizes([])
+    setFilterColors([])
+    setFilterCondition(0)
+  }
+
+  // ── CategoryNav subcategory select ──
   function handleCategoryNavSelect(cat: string | null, sub: string | null) {
     setFilterCategory(cat)
     setFilterSubcategory(sub)
@@ -122,11 +137,14 @@ export default function HomePage() {
     ? (FILTER_SIZES_BY_CATEGORY[filterCategory] ?? DEFAULT_SIZES)
     : []
 
-  // Heading reflects active filter
+  const GENDER_LABELS: Record<string, string> = { qadin: 'Qadın', kisi: 'Kişi', usaq: 'Uşaq', el: 'Əl işi' }
+
   const headingLabel = filterSubcategory
     ? filterSubcategory
     : filterCategory
     ? filterCategory
+    : activeGender
+    ? GENDER_LABELS[activeGender] ?? 'Son Elanlar'
     : 'Son Elanlar'
 
   return (
@@ -178,7 +196,12 @@ export default function HomePage() {
 
       {/* ── CategoryNav — sticky below navbar (~65px) ── */}
       <div className="sticky top-[65px] z-40">
-        <CategoryNav onSelect={handleCategoryNavSelect} />
+        <CategoryNav
+          onSelect={handleCategoryNavSelect}
+          onGenderChange={handleGenderChange}
+          activeCategory={filterCategory}
+          activeSubcategory={filterSubcategory}
+        />
       </div>
 
       {/* ── Search + FilterBar — sticky below CategoryNav (~65+44=109px) ── */}
@@ -246,6 +269,7 @@ export default function HomePage() {
             <p className="text-gray-500 text-sm">Bu filtrlərə uyğun elan tapılmadı.</p>
             <button
               onClick={() => {
+                setActiveGender(null)
                 setFilterCategory(null)
                 setFilterSubcategory(null)
                 setFilterBrand('')
