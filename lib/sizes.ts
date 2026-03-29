@@ -9,6 +9,7 @@ export const CATEGORIES = [
   'Aksesuar',
   'Çanta',
   'İdman geyimi',
+  'Əl işi',
 ]
 
 export const CATEGORY_EMOJIS: Record<string, string> = {
@@ -20,6 +21,7 @@ export const CATEGORY_EMOJIS: Record<string, string> = {
   'Aksesuar': '💍',
   'Çanta': '👜',
   'İdman geyimi': '🏃',
+  'Əl işi': '🧶',
 }
 
 export const SUBCATEGORIES: Record<string, string[]> = {
@@ -31,6 +33,7 @@ export const SUBCATEGORIES: Record<string, string[]> = {
   'Aksesuar': ['Qurşaq', 'Qalstuk', 'Şərf', 'Şal', 'Əlcək', 'Papaq', 'Günəş eynəyi', 'Qol saatı', 'Pul qabı', 'Zinət əşyaları'],
   'Çanta': ['Əl çantası', 'Sırt çantası', 'Kiçik əl çantası', 'Çətir'],
   'İdman geyimi': ['İdman üstü', 'İdman şalvarı', 'İdman dəsti', 'İdman ayaqqabısı'],
+  'Əl işi': ['Toxunma geyim', 'Tikilmiş paltar', 'Bəzək əşyaları', 'Əl işi çanta', 'Əl işi aksesuar', 'Əl işi corab', 'Xüsusi sifariş', 'Digər əl işi'],
 }
 
 export const SIZES_BY_SUBCATEGORY: Record<string, string[]> = {
@@ -95,6 +98,15 @@ export const SIZES_BY_SUBCATEGORY: Record<string, string[]> = {
   'Çətir': ['Universal'],
   // İdman geyimi
   'İdman üstü': ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
+  // Əl işi
+  'Toxunma geyim': ['Universal'],
+  'Tikilmiş paltar': ['Universal'],
+  'Bəzək əşyaları': ['Universal'],
+  'Əl işi çanta': ['Universal'],
+  'Əl işi aksesuar': ['Universal'],
+  'Əl işi corab': ['Universal'],
+  'Xüsusi sifariş': ['Universal'],
+  'Digər əl işi': ['Universal'],
 }
 
 // For FilterBar — representative sizes per top-level category
@@ -107,6 +119,7 @@ export const FILTER_SIZES_BY_CATEGORY: Record<string, string[]> = {
   'Aksesuar': ['Universal'],
   'Çanta': ['Universal'],
   'İdman geyimi': ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
+  'Əl işi': ['Universal'],
 }
 
 export const DEFAULT_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'Universal']

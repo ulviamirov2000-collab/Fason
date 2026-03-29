@@ -4,10 +4,12 @@ import Image from 'next/image'
 import { useEffect, useState, useCallback } from 'react'
 import FilterBar from '@/components/FilterBar'
 import SearchBar from '@/components/SearchBar'
+import CategoryNav from '@/components/CategoryNav'
 import ListingCard, { MockListing } from '@/components/ListingCard'
 import Footer from '@/components/Footer'
 import { supabase } from '@/lib/supabase'
 import type { ListingRow } from '@/lib/supabase'
+import { SIZES_BY_SUBCATEGORY, FILTER_SIZES_BY_CATEGORY, DEFAULT_SIZES } from '@/lib/sizes'
 
 const CONDITION_VALUES = ['', 'new', 'good', 'fair'] as const
 const ROTATIONS: (-1 | 0 | 1)[] = [-1, 1, -1, 0, 1, -1, 0, 1]
@@ -87,28 +89,30 @@ export default function HomePage() {
 
   useEffect(() => { fetchListings() }, [fetchListings])
 
-  // ── Search bar handlers ──
+  // ── CategoryNav handler ──
+  function handleCategoryNavSelect(cat: string | null, sub: string | null) {
+    setFilterCategory(cat)
+    setFilterSubcategory(sub)
+    setFilterSize(null)
+  }
+
+  // ── SearchBar handlers ──
   function handleSearchSelect(sub: string, cat: string) {
     setFilterSubcategory(sub)
     setFilterCategory(cat)
+    setFilterSize(null)
   }
 
   function handleSearchClear() {
     setFilterSubcategory(null)
-    // Don't clear category — user may have set it manually in FilterBar
   }
 
-  // ── FilterBar handlers ──
-  function handleCategoryChange(cat: string | null) {
-    setFilterCategory(cat)
-    setFilterSubcategory(null)
-    setFilterSize(null)
-  }
-
-  function handleSubcategoryChange(sub: string | null) {
-    setFilterSubcategory(sub)
-    setFilterSize(null)
-  }
+  // Sizes available for the current filter state
+  const availableSizes = filterSubcategory
+    ? (SIZES_BY_SUBCATEGORY[filterSubcategory] ?? DEFAULT_SIZES)
+    : filterCategory
+    ? (FILTER_SIZES_BY_CATEGORY[filterCategory] ?? DEFAULT_SIZES)
+    : DEFAULT_SIZES
 
   // Heading reflects active filter
   const headingLabel = filterSubcategory
@@ -164,8 +168,13 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── Sticky search + filter wrapper ── */}
+      {/* ── CategoryNav — sticky below navbar (~65px) ── */}
       <div className="sticky top-[65px] z-40">
+        <CategoryNav onSelect={handleCategoryNavSelect} />
+      </div>
+
+      {/* ── Search + FilterBar — sticky below CategoryNav (~65+44=109px) ── */}
+      <div className="sticky top-[109px] z-30">
         {/* Search bar */}
         <div
           className="w-full px-4 py-3"
@@ -180,15 +189,12 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Filter bar */}
+        {/* Filter bar — sizes, condition, sort only */}
         <FilterBar
-          category={filterCategory}
-          subcategory={filterSubcategory}
+          availableSizes={availableSizes}
           size={filterSize}
           condition={filterCondition}
           sort={filterSort}
-          onCategoryChange={handleCategoryChange}
-          onSubcategoryChange={handleSubcategoryChange}
           onSizeChange={setFilterSize}
           onConditionChange={setFilterCondition}
           onSortChange={setFilterSort}
