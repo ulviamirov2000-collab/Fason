@@ -22,6 +22,7 @@ export type Database = {
           phone: string | null
           full_name: string | null
           avatar_url: string | null
+          address: string | null
           is_seller: boolean
           is_banned: boolean
           created_at: string
@@ -95,6 +96,27 @@ export type Database = {
           created_at: string
         }
       }
+      comments: {
+        Row: {
+          id: string
+          listing_id: string
+          user_id: string
+          text: string
+          created_at: string
+        }
+      }
+      notifications: {
+        Row: {
+          id: string
+          user_id: string
+          type: string
+          title: string
+          body: string | null
+          link: string | null
+          is_read: boolean
+          created_at: string
+        }
+      }
     }
   }
 }
@@ -105,3 +127,5 @@ export type MessageRow = Database['public']['Tables']['messages']['Row']
 export type BasketRow  = Database['public']['Tables']['baskets']['Row']
 export type OfferRow   = Database['public']['Tables']['offers']['Row']
 export type OrderRow   = Database['public']['Tables']['orders']['Row']
+export type CommentRow = Database['public']['Tables']['comments']['Row']
+export type NotifRow   = Database['public']['Tables']['notifications']['Row']

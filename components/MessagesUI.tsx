@@ -37,6 +37,8 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('az-AZ', { hour: '2-digit', minute: '2-digit' })
 }
 
+const ADMIN_EMAIL = 'ulvi.amirov.2000@gmail.com'
+
 export default function MessagesUI({ currentUserId }: Props) {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeConv, setActiveConv] = useState<Conversation | null>(null)
@@ -44,27 +46,40 @@ export default function MessagesUI({ currentUserId }: Props) {
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [adminUserId, setAdminUserId] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const activeConvRef = useRef<Conversation | null>(null)
+
+  useEffect(() => {
+    supabase.from('users').select('id').eq('email', ADMIN_EMAIL).single()
+      .then(({ data }) => { if (data) setAdminUserId(data.id) })
+  }, [])
 
   useEffect(() => { activeConvRef.current = activeConv }, [activeConv])
 
   const loadConversations = useCallback(async () => {
+    if (!adminUserId) return
+
     const { data: allMsgs } = await supabase
       .from('messages')
       .select('*')
       .or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`)
       .order('created_at', { ascending: false })
 
-    if (!allMsgs || allMsgs.length === 0) {
+    // Only show conversations where one party is admin
+    const filtered = (allMsgs ?? []).filter(m =>
+      m.sender_id === adminUserId || m.receiver_id === adminUserId
+    )
+
+    if (filtered.length === 0) {
       setConversations([])
       setLoading(false)
       return
     }
 
-    const listingIds = [...new Set(allMsgs.map((m) => m.listing_id))]
+    const listingIds = [...new Set(filtered.map((m) => m.listing_id))]
     const otherUserIds = [...new Set(
-      allMsgs.map((m) => m.sender_id === currentUserId ? m.receiver_id : m.sender_id)
+      filtered.map((m) => m.sender_id === currentUserId ? m.receiver_id : m.sender_id)
     )]
 
     const [{ data: listingsData }, { data: usersData }] = await Promise.all([
@@ -75,9 +90,9 @@ export default function MessagesUI({ currentUserId }: Props) {
     const listingMap = new Map((listingsData ?? []).map((l) => [l.id, l]))
     const userMap = new Map((usersData ?? []).map((u) => [u.id, u]))
 
-    // Build conversations (allMsgs sorted newest first, so first occurrence = latest msg)
+    // Build conversations (filtered sorted newest first, so first occurrence = latest msg)
     const convMap = new Map<string, Conversation>()
-    for (const msg of allMsgs) {
+    for (const msg of filtered) {
       const otherUserId = msg.sender_id === currentUserId ? msg.receiver_id : msg.sender_id
       const key = `${msg.listing_id}::${otherUserId}`
 
@@ -107,7 +122,7 @@ export default function MessagesUI({ currentUserId }: Props) {
 
     setConversations([...convMap.values()])
     setLoading(false)
-  }, [currentUserId])
+  }, [currentUserId, adminUserId])
 
   useEffect(() => { loadConversations() }, [loadConversations])
 
@@ -243,8 +258,8 @@ export default function MessagesUI({ currentUserId }: Props) {
         {conversations.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
             <div className="text-4xl mb-3">💬</div>
-            <p className="text-sm text-gray-500">Hələ söhbət yoxdur</p>
-            <p className="text-xs text-gray-400 mt-1">Bir elan aç və satıcıya yaz</p>
+            <p className="text-sm text-gray-500">Hələ mesaj yoxdur</p>
+            <p className="text-xs text-gray-400 mt-1">Elan səhifəsindən adminə yaz</p>
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto">

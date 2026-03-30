@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import type { User } from '@supabase/supabase-js'
+import type { NotifRow } from '@/lib/supabase'
 
 export default function Navbar() {
   const router = useRouter()
@@ -13,10 +14,14 @@ export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [user, setUser] = useState<User | null>(null)
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [notifOpen, setNotifOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [basketCount, setBasketCount] = useState(0)
+  const [notifCount, setNotifCount] = useState(0)
+  const [notifs, setNotifs] = useState<NotifRow[]>([])
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const notifRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     // Get initial session
@@ -75,6 +80,60 @@ export default function Navbar() {
     const interval = setInterval(fetchCount, 30_000)
     return () => clearInterval(interval)
   }, [user])
+
+  // Notifications: fetch + poll
+  useEffect(() => {
+    if (!user) { setNotifCount(0); setNotifs([]); return }
+
+    function fetchNotifs() {
+      supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user!.id)
+        .order('created_at', { ascending: false })
+        .limit(15)
+        .then(({ data }) => {
+          const rows = (data ?? []) as NotifRow[]
+          setNotifs(rows)
+          setNotifCount(rows.filter(n => !n.is_read).length)
+        })
+    }
+
+    fetchNotifs()
+    const interval = setInterval(fetchNotifs, 20_000)
+    window.addEventListener('notif-changed', fetchNotifs)
+    return () => { clearInterval(interval); window.removeEventListener('notif-changed', fetchNotifs) }
+  }, [user])
+
+  // Close notif dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setNotifOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  async function markAllNotifsRead() {
+    if (!user) return
+    await supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('user_id', user.id)
+      .eq('is_read', false)
+    setNotifs(n => n.map(x => ({ ...x, is_read: true })))
+    setNotifCount(0)
+  }
+
+  async function markNotifRead(id: string, link?: string | null) {
+    await supabase.from('notifications').update({ is_read: true }).eq('id', id)
+    setNotifs(n => n.map(x => x.id === id ? { ...x, is_read: true } : x))
+    setNotifCount(c => Math.max(0, c - 1))
+    setNotifOpen(false)
+    if (link) router.push(link)
+  }
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -144,6 +203,64 @@ export default function Navbar() {
           {/* Auth area */}
           {user ? (
             <>
+            {/* Notifications bell */}
+            <div className="relative" ref={notifRef}>
+              <button
+                onClick={() => setNotifOpen(!notifOpen)}
+                className="relative flex items-center justify-center w-9 h-9 rounded-full transition-colors hover:bg-white/10"
+                aria-label="Bildirişlər"
+              >
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                {notifCount > 0 && (
+                  <span
+                    className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full flex items-center justify-center text-xs font-bold text-white px-1"
+                    style={{ backgroundColor: '#FF2D78', border: '1.5px solid #1a1040' }}
+                  >
+                    {notifCount > 9 ? '9+' : notifCount}
+                  </span>
+                )}
+              </button>
+
+              {notifOpen && (
+                <div
+                  className="absolute right-0 top-12 w-80 rounded-2xl overflow-hidden z-50"
+                  style={{ border: '2px solid #1a1040', boxShadow: '3px 3px 0 #1a1040', backgroundColor: 'white', maxHeight: '400px', overflowY: 'auto' }}
+                >
+                  <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white">
+                    <span className="text-sm font-bold" style={{ color: '#1a1040' }}>Bildirişlər</span>
+                    {notifCount > 0 && (
+                      <button onClick={markAllNotifsRead} className="text-xs font-medium" style={{ color: '#FF2D78' }}>
+                        Hamısını oxu
+                      </button>
+                    )}
+                  </div>
+                  {notifs.length === 0 ? (
+                    <div className="px-4 py-6 text-center text-sm text-gray-400">Bildiriş yoxdur</div>
+                  ) : (
+                    notifs.map(n => (
+                      <button
+                        key={n.id}
+                        onClick={() => markNotifRead(n.id, n.link)}
+                        className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 flex gap-3 items-start"
+                        style={{ backgroundColor: n.is_read ? 'white' : '#FFF5F8' }}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold truncate" style={{ color: '#1a1040' }}>{n.title}</p>
+                          {n.body && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.body}</p>}
+                          <p className="text-xs text-gray-300 mt-1">{new Date(n.created_at).toLocaleDateString('az-AZ')}</p>
+                        </div>
+                        {!n.is_read && (
+                          <div className="w-2 h-2 rounded-full mt-1 flex-shrink-0" style={{ backgroundColor: '#FF2D78' }} />
+                        )}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Messages icon with unread badge */}
             <Link
               href="/messages"

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
+import ChatDrawer from '@/components/ChatDrawer'
 
 const ADMIN_EMAIL = 'ulvi.amirov.2000@gmail.com'
 
@@ -70,7 +71,9 @@ type AdminOrder = {
   listing_title:    string
   listing_image:    string | null
   listing_id:       string
+  buyer_id:         string
   buyer_name:       string
+  seller_id:        string
   seller_name:      string
   final_price:      number
   delivery_needed:  boolean
@@ -114,6 +117,10 @@ export default function AdminPage() {
   const [orders,      setOrders]      = useState<AdminOrder[]>([])
   const [unseenCount, setUnseenCount] = useState(0)
 
+  // Admin user ID + chat drawer
+  const [adminUserId,  setAdminUserId]  = useState<string | null>(null)
+  const [chatTarget,   setChatTarget]   = useState<{ userId: string; listingId: string; userName: string; listingTitle: string; listingPrice: number; listingImage?: string } | null>(null)
+
   // ── Auth check ───────────────────────────────────────────────────────────────
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -121,6 +128,7 @@ export default function AdminPage() {
         router.replace('/')
         return
       }
+      setAdminUserId(data.user.id)
       setAuthed(true)
     })
   }, [router])
@@ -277,7 +285,9 @@ export default function AdminPage() {
         listing_id:       o.listing_id,
         listing_title:    o.listings?.title_az ?? 'Elan',
         listing_image:    o.listings?.images?.[0] ?? null,
+        buyer_id:         o.buyer_id,
         buyer_name:       o.buyers?.full_name || o.buyers?.email?.split('@')[0] || 'Alıcı',
+        seller_id:        o.seller_id,
         seller_name:      o.sellers?.full_name || o.sellers?.email?.split('@')[0] || 'Satıcı',
         final_price:      o.final_price,
         delivery_needed:  o.delivery_needed ?? false,
@@ -925,6 +935,20 @@ export default function AdminPage() {
                                 Ləğv et
                               </button>
                             )}
+                            <button
+                              onClick={() => setChatTarget({ userId: o.buyer_id, listingId: o.listing_id, userName: o.buyer_name, listingTitle: o.listing_title, listingPrice: o.final_price, listingImage: o.listing_image ?? undefined })}
+                              className="text-[11px] font-semibold px-2.5 py-1 rounded-lg hover:bg-pink-50 transition-colors"
+                              style={{ color: '#FF2D78', border: '1px solid #fecdd3' }}
+                            >
+                              💬 Alıcıya yaz
+                            </button>
+                            <button
+                              onClick={() => setChatTarget({ userId: o.seller_id, listingId: o.listing_id, userName: o.seller_name, listingTitle: o.listing_title, listingPrice: o.final_price, listingImage: o.listing_image ?? undefined })}
+                              className="text-[11px] font-semibold px-2.5 py-1 rounded-lg hover:bg-yellow-50 transition-colors"
+                              style={{ color: '#d97706', border: '1px solid #fde68a' }}
+                            >
+                              💬 Satıcıya yaz
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -949,6 +973,20 @@ export default function AdminPage() {
 
         </div>
       </main>
+
+      {/* Admin → User ChatDrawer */}
+      {chatTarget && adminUserId && (
+        <ChatDrawer
+          listingId={chatTarget.listingId}
+          sellerId={chatTarget.userId}
+          sellerName={chatTarget.userName}
+          listingTitle={chatTarget.listingTitle}
+          listingPrice={chatTarget.listingPrice}
+          listingImage={chatTarget.listingImage}
+          currentUserId={adminUserId}
+          onClose={() => setChatTarget(null)}
+        />
+      )}
     </div>
   )
 }

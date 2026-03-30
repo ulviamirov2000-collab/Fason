@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
@@ -18,6 +18,7 @@ const statusConfig = {
 export default function ProfilePage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const id = params.id as string
 
   const [profileUser, setProfileUser] = useState<UserRow | null>(null)
@@ -64,7 +65,9 @@ export default function ProfilePage() {
           phone: null,
           full_name: authUser.user_metadata?.full_name ?? null,
           avatar_url: null,
+          address: null,
           is_seller: false,
+          is_banned: false,
           created_at: authUser.created_at,
         }
         await supabase.from('users').upsert(fallback, { onConflict: 'id' })
@@ -154,7 +157,35 @@ export default function ProfilePage() {
   }
 
   const isOwner = currentUserId === id
-  const [activeTab, setActiveTab] = useState<'listings' | 'messages'>('listings')
+  const [activeTab, setActiveTab] = useState<'listings' | 'messages' | 'settings'>(
+    (searchParams.get('tab') as 'listings' | 'messages' | 'settings') ?? 'listings'
+  )
+
+  // Settings tab state
+  const [settingsPhone,   setSettingsPhone]   = useState('')
+  const [settingsAddress, setSettingsAddress] = useState('')
+  const [settingsSaving,  setSettingsSaving]  = useState(false)
+
+  useEffect(() => {
+    if (profileUser) {
+      setSettingsPhone(profileUser.phone ?? '')
+      setSettingsAddress((profileUser as UserRow & { address?: string | null }).address ?? '')
+    }
+  }, [profileUser])
+
+  async function saveSettings() {
+    if (!currentUserId) return
+    setSettingsSaving(true)
+    const { error } = await supabase
+      .from('users')
+      .update({ phone: settingsPhone.trim() || null, address: settingsAddress.trim() || null })
+      .eq('id', currentUserId)
+    setSettingsSaving(false)
+    if (error) { showToast(`Xəta: ${error.message}`); return }
+    setProfileUser(prev => prev ? { ...prev, phone: settingsPhone.trim() || null } : prev)
+    showToast('Parametrlər saxlanıldı ✓')
+    if (searchParams.get('tab') === 'settings') router.replace(`/profile/${id}`)
+  }
 
   if (loading) {
     return (
@@ -336,8 +367,8 @@ export default function ProfilePage() {
       {/* Tabs — owner sees Elanlarım + Mesajlar, others see just Aktiv elanlar */}
       <div>
         {isOwner ? (
-          <div className="flex items-center gap-2 mb-5">
-            {(['listings', 'messages'] as const).map((tab) => (
+          <div className="flex items-center gap-2 mb-5 flex-wrap">
+            {(['listings', 'messages', 'settings'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -348,7 +379,7 @@ export default function ProfilePage() {
                     : { backgroundColor: 'white', color: '#1a1040', border: '2px solid #ccc' }
                 }
               >
-                {tab === 'listings' ? 'Elanlarım' : '💬 Mesajlar'}
+                {tab === 'listings' ? 'Elanlarım' : tab === 'messages' ? '💬 Mesajlar' : '⚙️ Parametrlər'}
               </button>
             ))}
             {activeTab === 'listings' && (
@@ -373,6 +404,57 @@ export default function ProfilePage() {
         {isOwner && activeTab === 'messages' && currentUserId && (
           <div style={{ height: 'calc(100vh - 340px)', minHeight: 400 }}>
             <MessagesUI currentUserId={currentUserId} />
+          </div>
+        )}
+
+        {/* Settings tab (owner only) */}
+        {isOwner && activeTab === 'settings' && (
+          <div
+            className="rounded-2xl p-6 flex flex-col gap-5 max-w-md"
+            style={{ border: '2px solid #1a1040', backgroundColor: 'white' }}
+          >
+            <h3 className="font-bold text-base" style={{ fontFamily: 'var(--font-unbounded)', color: '#1a1040' }}>
+              ⚙️ Hesab parametrləri
+            </h3>
+
+            <div>
+              <label className="text-sm font-semibold mb-1.5 block" style={{ color: '#1a1040' }}>
+                Telefon nömrəsi <span style={{ color: '#FF2D78' }}>*</span>
+              </label>
+              <input
+                type="tel"
+                value={settingsPhone}
+                onChange={e => setSettingsPhone(e.target.value)}
+                placeholder="+994 50 000 00 00"
+                className="w-full px-4 py-3 rounded-xl text-sm outline-none"
+                style={{ border: '2px solid #1a1040', backgroundColor: '#FAF7F2' }}
+              />
+              <p className="text-xs text-gray-400 mt-1">Sifariş zamanı operatorla əlaqə üçün lazımdır</p>
+            </div>
+
+            <div>
+              <label className="text-sm font-semibold mb-1.5 block" style={{ color: '#1a1040' }}>
+                Ünvan <span style={{ color: '#FF2D78' }}>*</span>
+              </label>
+              <textarea
+                rows={2}
+                value={settingsAddress}
+                onChange={e => setSettingsAddress(e.target.value)}
+                placeholder="Şəhər, küçə, ev nömrəsi..."
+                className="w-full px-4 py-3 rounded-xl text-sm outline-none resize-none"
+                style={{ border: '2px solid #1a1040', backgroundColor: '#FAF7F2' }}
+              />
+              <p className="text-xs text-gray-400 mt-1">Elan yerləşdirmək üçün tələb olunur</p>
+            </div>
+
+            <button
+              onClick={saveSettings}
+              disabled={settingsSaving || !settingsPhone.trim() || !settingsAddress.trim()}
+              className="py-3 rounded-2xl font-bold text-white text-sm disabled:opacity-50"
+              style={{ backgroundColor: '#FF2D78', border: '2px solid #1a1040', boxShadow: '3px 3px 0 #1a1040' }}
+            >
+              {settingsSaving ? 'Saxlanılır...' : 'Saxla'}
+            </button>
           </div>
         )}
 

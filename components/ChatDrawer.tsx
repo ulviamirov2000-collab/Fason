@@ -16,6 +16,7 @@ type Props = {
   listingPrice: number
   listingImage?: string
   currentUserId: string
+  initialMessage?: string
   onClose: () => void
 }
 
@@ -37,11 +38,11 @@ function parseOfferMsg(text: string) {
 
 export default function ChatDrawer({
   listingId, sellerId, sellerName, sellerAvatarUrl, listingTitle, listingPrice, listingImage,
-  currentUserId, onClose,
+  currentUserId, initialMessage, onClose,
 }: Props) {
   const [messages,      setMessages]      = useState<MessageRow[]>([])
   const [offers,        setOffers]        = useState<OfferRow[]>([])
-  const [text,          setText]          = useState('')
+  const [text,          setText]          = useState(initialMessage ?? '')
   const [sending,       setSending]       = useState(false)
   const [spamWarning,   setSpamWarning]   = useState(false)
   const [counterInputs, setCounterInputs] = useState<Record<string, string>>({})

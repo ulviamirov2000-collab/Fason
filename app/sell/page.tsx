@@ -98,11 +98,24 @@ export default function SellPage() {
 
   const step1Valid = !!(form.gender && form.category && form.subcategory && form.color && form.condition)
 
+  const [profileCheckModal, setProfileCheckModal] = useState(false)
+
   async function publishListing() {
     if (!userId) { setPublishError('İstifadəçi tapılmadı. Yenidən daxil olun.'); return }
     if (!form.title_az.trim()) { setPublishError('Başlıq tələb olunur (Azərbaycanca).'); return }
     if (!form.price || parseFloat(form.price) <= 0) { setPublishError('Düzgün qiymət daxil edin.'); return }
     if (!form.condition) { setPublishError('Vəziyyət seçilməlidir.'); return }
+
+    // Check profile completeness (phone + address required)
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('phone, address')
+      .eq('id', userId)
+      .single()
+    if (!userProfile?.phone || !(userProfile as { phone?: string | null; address?: string | null }).address) {
+      setProfileCheckModal(true)
+      return
+    }
 
     setPublishing(true)
     setPublishError(null)
@@ -579,6 +592,43 @@ export default function SellPage() {
           </button>
         )}
       </div>
+
+      {/* Profile completeness modal */}
+      {profileCheckModal && userId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl p-6 flex flex-col gap-4 text-center"
+            style={{ backgroundColor: 'white', border: '2px solid #1a1040', boxShadow: '4px 4px 0 #1a1040' }}
+          >
+            <div className="text-4xl">📋</div>
+            <h3 className="font-bold text-base" style={{ fontFamily: 'var(--font-unbounded)', color: '#1a1040' }}>
+              Profil tamamlanmayıb
+            </h3>
+            <p className="text-sm text-gray-500">
+              Elan yerləşdirmək üçün telefon nömrəsi və ünvan əlavə etməlisiniz.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setProfileCheckModal(false)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold"
+                style={{ border: '2px solid #ccc', color: '#666' }}
+              >
+                Ləğv et
+              </button>
+              <button
+                onClick={() => router.push(`/profile/${userId}?tab=settings`)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white"
+                style={{ backgroundColor: '#FF2D78', border: '2px solid #1a1040' }}
+              >
+                Profili tamamla
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

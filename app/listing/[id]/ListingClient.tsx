@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import type { ListingRow, OfferRow } from '@/lib/supabase'
+import type { ListingRow, OfferRow, CommentRow } from '@/lib/supabase'
 import ChatDrawer from '@/components/ChatDrawer'
 
 type FullListing = ListingRow & {
@@ -17,11 +17,24 @@ type FullListing = ListingRow & {
   } | null
 }
 
+type CommentWithUser = CommentRow & {
+  users: { full_name: string | null; email: string | null; avatar_url: string | null } | null
+}
+
+type OfferWithBuyer = OfferRow & {
+  users: { full_name: string | null; email: string | null; avatar_url: string | null } | null
+}
+
 const conditionMap = {
   new:  { label: 'Yeni',  color: '#00E5CC' },
   good: { label: 'Yaxşı', color: '#FF9500' },
   fair: { label: 'Orta',  color: '#FF2D78' },
 }
+
+const ADMIN_EMAIL = 'ulvi.amirov.2000@gmail.com'
+
+const PHONE_RE = /(\+?\d[\d\s\-().]{6,}\d)/
+const LINK_RE  = /https?:\/\/|www\.|\.com|\.az|t\.me|wa\.me|instagram\.com/i
 
 export default function ListingClient({ id }: { id: string }) {
   const router = useRouter()
@@ -30,7 +43,11 @@ export default function ListingClient({ id }: { id: string }) {
   const [activeImg,     setActiveImg]     = useState(0)
   const [loading,       setLoading]       = useState(true)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [chatOpen,      setChatOpen]      = useState(false)
+  const [adminUserId,   setAdminUserId]   = useState<string | null>(null)
+
+  // Chat with admin
+  const [chatOpen,         setChatOpen]         = useState(false)
+  const [chatPrefilledMsg, setChatPrefilledMsg] = useState('')
 
   // Basket
   const [inBasket,      setInBasket]      = useState(false)
@@ -40,14 +57,35 @@ export default function ListingClient({ id }: { id: string }) {
   // Social proof
   const [messageCount, setMessageCount] = useState(0)
 
-  // Offer modal
+  // Offer modal (buyer)
   const [showOfferModal, setShowOfferModal] = useState(false)
   const [offerPrice,     setOfferPrice]     = useState('')
   const [offerLoading,   setOfferLoading]   = useState(false)
   const [offerSent,      setOfferSent]      = useState(false)
 
-  // Accepted / countered offer for this buyer
+  // Buyer's existing offer
   const [myOffer, setMyOffer] = useState<OfferRow | null>(null)
+
+  // Seller incoming offers panel
+  const [sellerOffers,       setSellerOffers]       = useState<OfferWithBuyer[]>([])
+  const [counterInputs,      setCounterInputs]      = useState<Record<string, string>>({})
+  const [offerActionLoading, setOfferActionLoading] = useState<string | null>(null)
+
+  // Comments
+  const [comments,       setComments]       = useState<CommentWithUser[]>([])
+  const [commentText,    setCommentText]    = useState('')
+  const [commentLoading, setCommentLoading] = useState(false)
+  const [commentWarning, setCommentWarning] = useState(false)
+
+  // Fetch admin user ID once
+  useEffect(() => {
+    supabase
+      .from('users')
+      .select('id')
+      .eq('email', ADMIN_EMAIL)
+      .single()
+      .then(({ data }) => { if (data) setAdminUserId(data.id) })
+  }, [])
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null))
@@ -68,6 +106,14 @@ export default function ListingClient({ id }: { id: string }) {
       .select('id', { count: 'exact', head: true })
       .eq('listing_id', id)
       .then(({ count }) => setMessageCount(count ?? 0))
+
+    // Load comments
+    supabase
+      .from('comments')
+      .select('*, users:user_id(full_name, email, avatar_url)')
+      .eq('listing_id', id)
+      .order('created_at', { ascending: true })
+      .then(({ data }) => setComments((data ?? []) as CommentWithUser[]))
   }, [id])
 
   useEffect(() => {
@@ -81,7 +127,7 @@ export default function ListingClient({ id }: { id: string }) {
       .then(({ data }) => setInBasket(!!data))
   }, [currentUserId, id])
 
-  // Check for existing offer from this buyer
+  // Buyer's offer
   useEffect(() => {
     if (!currentUserId) { setMyOffer(null); return }
     supabase
@@ -94,6 +140,19 @@ export default function ListingClient({ id }: { id: string }) {
       .maybeSingle()
       .then(({ data }) => setMyOffer(data as OfferRow | null))
   }, [currentUserId, id])
+
+  // Seller: load incoming offers
+  useEffect(() => {
+    if (!currentUserId || !listing) return
+    if (currentUserId !== listing.users?.id) return
+    supabase
+      .from('offers')
+      .select('*, users:buyer_id(full_name, email, avatar_url)')
+      .eq('listing_id', id)
+      .in('status', ['pending', 'countered'])
+      .order('created_at', { ascending: false })
+      .then(({ data }) => setSellerOffers((data ?? []) as OfferWithBuyer[]))
+  }, [currentUserId, id, listing])
 
   async function toggleBasket() {
     if (!currentUserId) { router.push('/auth'); return }
@@ -122,7 +181,6 @@ export default function ListingClient({ id }: { id: string }) {
 
     setOfferLoading(true)
 
-    // Insert offer
     const { data: offer, error } = await supabase
       .from('offers')
       .insert({
@@ -136,20 +194,92 @@ export default function ListingClient({ id }: { id: string }) {
       .single()
 
     if (!error && offer) {
-      // Send offer message in chat so seller sees it
-      const msgText = `💰 OFFER:${offer.id}:${price}:${listing.price}`
-      await supabase.from('messages').insert({
-        listing_id:  id,
-        sender_id:   currentUserId,
-        receiver_id: listing.users.id,
-        text:        msgText,
-        is_read:     false,
+      // Notify seller
+      await supabase.from('notifications').insert({
+        user_id: listing.users.id,
+        type:    'offer',
+        title:   'Yeni qiymət təklifi',
+        body:    `${listing.title_az} elanına ${price} ₼ təklif edildi`,
+        link:    `/listing/${id}`,
       })
+      window.dispatchEvent(new CustomEvent('notif-changed'))
       setMyOffer(offer as OfferRow)
     }
 
     setOfferLoading(false)
     setOfferSent(true)
+  }
+
+  async function acceptOffer(offer: OfferWithBuyer) {
+    setOfferActionLoading(offer.id)
+    await supabase.from('offers').update({ status: 'accepted' }).eq('id', offer.id)
+    await supabase.from('notifications').insert({
+      user_id: offer.buyer_id,
+      type:    'offer_accepted',
+      title:   'Təklifiniz qəbul edildi!',
+      body:    `${listing?.title_az} — ${offer.offered_price} ₼ qiymətiniz qəbul edildi`,
+      link:    `/order/${id}?offer=${offer.id}`,
+    })
+    window.dispatchEvent(new CustomEvent('notif-changed'))
+    setSellerOffers(s => s.filter(o => o.id !== offer.id))
+    setOfferActionLoading(null)
+  }
+
+  async function rejectOffer(offer: OfferWithBuyer) {
+    setOfferActionLoading(offer.id)
+    await supabase.from('offers').update({ status: 'rejected' }).eq('id', offer.id)
+    await supabase.from('notifications').insert({
+      user_id: offer.buyer_id,
+      type:    'offer_rejected',
+      title:   'Təklifiniz rədd edildi',
+      body:    `${listing?.title_az} elanındakı ${offer.offered_price} ₼ təklifiniz rədd edildi`,
+      link:    `/listing/${id}`,
+    })
+    window.dispatchEvent(new CustomEvent('notif-changed'))
+    setSellerOffers(s => s.filter(o => o.id !== offer.id))
+    setOfferActionLoading(null)
+  }
+
+  async function counterOffer(offer: OfferWithBuyer) {
+    const counterPrice = parseFloat(counterInputs[offer.id] ?? '')
+    if (!counterPrice || counterPrice <= 0) return
+    setOfferActionLoading(offer.id)
+    await supabase.from('offers').update({ status: 'countered', counter_price: counterPrice }).eq('id', offer.id)
+    await supabase.from('notifications').insert({
+      user_id: offer.buyer_id,
+      type:    'offer_countered',
+      title:   'Əks-təklif aldınız',
+      body:    `${listing?.title_az} — satıcı ${counterPrice} ₼ əks-təklif etdi`,
+      link:    `/listing/${id}`,
+    })
+    window.dispatchEvent(new CustomEvent('notif-changed'))
+    setSellerOffers(s => s.filter(o => o.id !== offer.id))
+    setOfferActionLoading(null)
+  }
+
+  async function submitComment() {
+    if (!currentUserId || !commentText.trim()) return
+    const isSuspicious = PHONE_RE.test(commentText) || LINK_RE.test(commentText)
+    if (isSuspicious) { setCommentWarning(true); return }
+
+    setCommentLoading(true)
+    const { data } = await supabase
+      .from('comments')
+      .insert({ listing_id: id, user_id: currentUserId, text: commentText.trim() })
+      .select('*, users:user_id(full_name, email, avatar_url)')
+      .single()
+
+    if (data) {
+      setComments(c => [...c, data as CommentWithUser])
+      setCommentText('')
+    }
+    setCommentLoading(false)
+    setCommentWarning(false)
+  }
+
+  async function deleteComment(commentId: string) {
+    await supabase.from('comments').delete().eq('id', commentId)
+    setComments(c => c.filter(x => x.id !== commentId))
   }
 
   if (loading) {
@@ -181,11 +311,10 @@ export default function ListingClient({ id }: { id: string }) {
   const isSeller    = !!seller && currentUserId === seller.id
   const isActive    = listing.status === 'active'
 
-  // Social proof
   const socialParts: string[] = []
-  if ((listing.views ?? 0) > 0)  socialParts.push(`👁 ${listing.views} baxış`)
-  if (basketCount > 0)           socialParts.push(`🛒 ${basketCount} səbətdə`)
-  if (messageCount > 0)          socialParts.push(`💬 ${messageCount} təklif`)
+  if ((listing.views ?? 0) > 0) socialParts.push(`👁 ${listing.views} baxış`)
+  if (basketCount > 0)          socialParts.push(`🛒 ${basketCount} səbətdə`)
+  if (messageCount > 0)         socialParts.push(`💬 ${messageCount} mesaj`)
 
   return (
     <>
@@ -325,7 +454,7 @@ export default function ListingClient({ id }: { id: string }) {
 
             {/* CTA buttons */}
             <div className="flex flex-col gap-3">
-              {/* "Al" — shown to buyer when active OR when offer accepted/countered */}
+              {/* "Al" — shown to buyer when active */}
               {!isSeller && isActive && (
                 <Link
                   href={`/order/${id}${myOffer && (myOffer.status === 'accepted' || myOffer.status === 'countered') ? `?offer=${myOffer.id}` : ''}`}
@@ -334,20 +463,6 @@ export default function ListingClient({ id }: { id: string }) {
                 >
                   🛍 Al {myOffer && myOffer.status === 'accepted' ? `· ${myOffer.offered_price} ₼` : myOffer?.status === 'countered' && myOffer.counter_price ? `· ${myOffer.counter_price} ₼` : `· ${listing.price} ₼`}
                 </Link>
-              )}
-
-              {/* Chat button */}
-              {seller && !isSeller && (
-                <button
-                  onClick={() => {
-                    if (!currentUserId) { router.push('/auth'); return }
-                    setChatOpen(true)
-                  }}
-                  className="w-full py-3.5 rounded-2xl font-bold text-white text-center transition-transform hover:scale-[1.02] active:scale-[0.98]"
-                  style={{ backgroundColor: '#FF2D78', border: '2px solid #1a1040', boxShadow: '3px 3px 0 #1a1040' }}
-                >
-                  💬 Satıcıya yaz
-                </button>
               )}
 
               {/* Offer button — only when active, not seller, no pending/accepted offer yet */}
@@ -373,6 +488,34 @@ export default function ListingClient({ id }: { id: string }) {
                 </div>
               )}
 
+              {/* Admin chat + Help — only for non-sellers */}
+              {!isSeller && adminUserId && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      if (!currentUserId) { router.push('/auth'); return }
+                      setChatPrefilledMsg('')
+                      setChatOpen(true)
+                    }}
+                    className="flex-1 py-3 rounded-2xl font-bold text-center transition-all hover:bg-gray-50"
+                    style={{ border: '2px solid #1a1040', color: '#1a1040', boxShadow: '3px 3px 0 #1a1040', fontSize: '13px' }}
+                  >
+                    💬 Adminə yaz
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!currentUserId) { router.push('/auth'); return }
+                      setChatPrefilledMsg(`Salam! "${listing.title_az}" elanı ilə bağlı sualım var.`)
+                      setChatOpen(true)
+                    }}
+                    className="py-3 px-4 rounded-2xl font-bold text-center transition-all hover:bg-gray-50"
+                    style={{ border: '2px solid #1a1040', color: '#1a1040', boxShadow: '3px 3px 0 #1a1040', fontSize: '13px' }}
+                  >
+                    ❓ Kömək
+                  </button>
+                </div>
+              )}
+
               {/* Basket */}
               <button
                 onClick={toggleBasket}
@@ -383,22 +526,170 @@ export default function ListingClient({ id }: { id: string }) {
                 {inBasket ? '🛒 Səbətdən çıxar' : '🛒 Səbətə at'}
               </button>
             </div>
+
+            {/* Seller: incoming offers panel */}
+            {isSeller && sellerOffers.length > 0 && (
+              <div className="flex flex-col gap-3 mt-2">
+                <p className="text-sm font-bold" style={{ color: '#1a1040' }}>📬 Gələn təkliflər ({sellerOffers.length})</p>
+                {sellerOffers.map(offer => {
+                  const buyerName = offer.users?.full_name || offer.users?.email?.split('@')[0] || 'Alıcı'
+                  const isLoading = offerActionLoading === offer.id
+                  return (
+                    <div
+                      key={offer.id}
+                      className="rounded-2xl p-4 flex flex-col gap-3"
+                      style={{ border: '2px solid #1a1040', backgroundColor: 'white' }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold" style={{ color: '#1a1040' }}>{buyerName}</span>
+                        <span
+                          className="text-lg font-bold px-3 py-0.5 rounded-full"
+                          style={{ backgroundColor: '#FFE600', border: '1.5px solid #1a1040' }}
+                        >
+                          {offer.offered_price} ₼
+                        </span>
+                      </div>
+                      {offer.status === 'countered' && (
+                        <p className="text-xs text-orange-600">Əks-təklifiniz: {offer.counter_price} ₼</p>
+                      )}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => acceptOffer(offer)}
+                          disabled={isLoading}
+                          className="flex-1 py-2 rounded-xl text-xs font-bold text-white disabled:opacity-50"
+                          style={{ backgroundColor: '#10b981', border: '1.5px solid #1a1040' }}
+                        >
+                          ✓ Qəbul et
+                        </button>
+                        <button
+                          onClick={() => rejectOffer(offer)}
+                          disabled={isLoading}
+                          className="flex-1 py-2 rounded-xl text-xs font-bold text-white disabled:opacity-50"
+                          style={{ backgroundColor: '#ef4444', border: '1.5px solid #1a1040' }}
+                        >
+                          ✕ Rədd et
+                        </button>
+                      </div>
+                      <div className="flex gap-2 items-center">
+                        <input
+                          type="number"
+                          min={1}
+                          placeholder="Əks-təklif ₼"
+                          value={counterInputs[offer.id] ?? ''}
+                          onChange={e => setCounterInputs(p => ({ ...p, [offer.id]: e.target.value }))}
+                          className="flex-1 px-3 py-2 rounded-xl text-xs outline-none"
+                          style={{ border: '1.5px solid #1a1040' }}
+                        />
+                        <button
+                          onClick={() => counterOffer(offer)}
+                          disabled={isLoading || !counterInputs[offer.id]}
+                          className="py-2 px-3 rounded-xl text-xs font-bold text-white disabled:opacity-50"
+                          style={{ backgroundColor: '#FF9800', border: '1.5px solid #1a1040' }}
+                        >
+                          Göndər
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
+        </div>
+
+        {/* Comments section */}
+        <div className="mt-10">
+          <h2 className="text-base font-bold mb-4" style={{ fontFamily: 'var(--font-unbounded)', color: '#1a1040' }}>
+            💬 Şərhlər ({comments.length})
+          </h2>
+
+          {comments.length === 0 && (
+            <p className="text-sm text-gray-400 mb-4">Hələ şərh yoxdur. İlk şərhi siz yazın!</p>
+          )}
+
+          <div className="flex flex-col gap-3 mb-6">
+            {comments.map(c => {
+              const uName = c.users?.full_name || c.users?.email?.split('@')[0] || 'İstifadəçi'
+              const canDelete = currentUserId === c.user_id
+              return (
+                <div
+                  key={c.id}
+                  className="flex gap-3 p-3 rounded-2xl"
+                  style={{ border: '1.5px solid #e5e7eb', backgroundColor: 'white' }}
+                >
+                  <div
+                    className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-yellow-400 flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+                    style={{ border: '1.5px solid #1a1040' }}
+                  >
+                    {c.users?.avatar_url ? (
+                      <Image src={c.users.avatar_url} alt={uName} width={32} height={32} className="object-cover w-full h-full rounded-full" unoptimized />
+                    ) : (
+                      uName[0].toUpperCase()
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold" style={{ color: '#1a1040' }}>{uName}</span>
+                      <span className="text-xs text-gray-300">{new Date(c.created_at).toLocaleDateString('az-AZ')}</span>
+                      {canDelete && (
+                        <button onClick={() => deleteComment(c.id)} className="text-xs text-gray-300 hover:text-red-400 ml-auto">✕</button>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-700 mt-0.5">{c.text}</p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {currentUserId ? (
+            <div className="flex flex-col gap-2">
+              <textarea
+                rows={2}
+                value={commentText}
+                onChange={e => { setCommentText(e.target.value); setCommentWarning(false) }}
+                placeholder="Şərhinizi yazın..."
+                className="w-full px-4 py-3 rounded-xl text-sm outline-none resize-none"
+                style={{ border: '2px solid #1a1040', backgroundColor: 'white' }}
+              />
+              {commentWarning && (
+                <p className="text-xs" style={{ color: '#FF2D78' }}>
+                  Şərhdə telefon nömrəsi və ya xarici link qadağandır.
+                </p>
+              )}
+              <button
+                onClick={submitComment}
+                disabled={commentLoading || !commentText.trim()}
+                className="self-end px-6 py-2 rounded-full font-bold text-white text-sm disabled:opacity-50"
+                style={{ backgroundColor: '#FF2D78', border: '2px solid #1a1040' }}
+              >
+                {commentLoading ? '...' : 'Göndər'}
+              </button>
+            </div>
+          ) : (
+            <Link
+              href="/auth"
+              className="text-sm font-semibold underline"
+              style={{ color: '#FF2D78' }}
+            >
+              Şərh yazmaq üçün daxil olun
+            </Link>
+          )}
         </div>
       </main>
 
-      {/* Chat drawer */}
-      {chatOpen && seller && currentUserId && (
+      {/* Chat with Admin drawer */}
+      {chatOpen && adminUserId && currentUserId && (
         <ChatDrawer
           listingId={listing.id}
-          sellerId={seller.id}
-          sellerName={sellerName}
-          sellerAvatarUrl={seller.avatar_url ?? undefined}
+          sellerId={adminUserId}
+          sellerName="FASON Admin"
           listingTitle={listing.title_az}
           listingPrice={listing.price}
           listingImage={hasImages ? listing.images[0] : undefined}
           currentUserId={currentUserId}
-          onClose={() => setChatOpen(false)}
+          initialMessage={chatPrefilledMsg}
+          onClose={() => { setChatOpen(false); setChatPrefilledMsg('') }}
         />
       )}
 
@@ -417,7 +708,7 @@ export default function ListingClient({ id }: { id: string }) {
               <div className="flex flex-col items-center gap-3 py-4 text-center">
                 <div className="text-4xl">✅</div>
                 <p className="font-bold text-base" style={{ color: '#1a1040' }}>Təklifiniz göndərildi!</p>
-                <p className="text-sm text-gray-500">Satıcı cavab verdikdə mesaj gələcək.</p>
+                <p className="text-sm text-gray-500">Satıcı cavab verdikdə bildiriş alacaqsınız.</p>
                 <button
                   onClick={() => { setShowOfferModal(false); setOfferSent(false); setOfferPrice('') }}
                   className="mt-2 px-6 py-2 rounded-full font-bold text-white"
@@ -432,7 +723,7 @@ export default function ListingClient({ id }: { id: string }) {
                   <h3 className="font-bold text-base" style={{ fontFamily: 'var(--font-unbounded)', color: '#1a1040' }}>
                     💰 Qiymət təklif et
                   </h3>
-                  <p className="text-xs text-gray-400 mt-1">Satıcı qiymətdən aşağı: {listing.price} ₼</p>
+                  <p className="text-xs text-gray-400 mt-1">Satıcı qiymətindən aşağı: {listing.price} ₼</p>
                 </div>
 
                 <div
