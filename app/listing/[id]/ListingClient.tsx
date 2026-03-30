@@ -41,9 +41,10 @@ export default function ListingClient({ id }: { id: string }) {
 
   const [listing,       setListing]       = useState<FullListing | null>(null)
   const [activeImg,     setActiveImg]     = useState(0)
-  const [loading,       setLoading]       = useState(true)
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [adminUserId,   setAdminUserId]   = useState<string | null>(null)
+  const [loading,         setLoading]         = useState(true)
+  const [currentUserId,   setCurrentUserId]   = useState<string | null>(null)
+  const [currentUserName, setCurrentUserName] = useState<string>('İstifadəçi')
+  const [adminUserId,     setAdminUserId]     = useState<string | null>(null)
 
   // Chat with admin
   const [chatOpen,         setChatOpen]         = useState(false)
@@ -88,7 +89,13 @@ export default function ListingClient({ id }: { id: string }) {
   }, [])
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null))
+    supabase.auth.getUser().then(({ data }) => {
+      setCurrentUserId(data.user?.id ?? null)
+      if (data.user) {
+        const name = data.user.user_metadata?.full_name || data.user.email?.split('@')[0] || 'İstifadəçi'
+        setCurrentUserName(name)
+      }
+    })
 
     supabase
       .from('listings')
@@ -195,13 +202,31 @@ export default function ListingClient({ id }: { id: string }) {
 
     if (!error && offer) {
       // Notify seller
-      await supabase.from('notifications').insert({
-        user_id: listing.users.id,
-        type:    'offer',
-        title:   'Yeni qiymət təklifi',
-        body:    `${listing.title_az} elanına ${price} ₼ təklif edildi`,
-        link:    `/listing/${id}`,
-      })
+      const { data: notifData, error: notifError } = await supabase
+        .from('notifications')
+        .insert({
+          user_id: listing.users.id,
+          type:    'offer',
+          title:   'Yeni qiymət təklifi 💰',
+          body:    `${currentUserName} — "${listing.title_az}" üçün ${price} ₼ təklif etdi`,
+          link:    `/listing/${id}`,
+        })
+        .select()
+        .single()
+      console.log('[submitOffer] seller notification:', { notifData, notifError, sellerId: listing.users.id })
+
+      // System message to admin about new offer
+      if (adminUserId && currentUserId) {
+        const { error: msgError } = await supabase.from('messages').insert({
+          listing_id:  id,
+          sender_id:   currentUserId,
+          receiver_id: adminUserId,
+          text:        `💰 Yeni təklif: ${currentUserName} → "${listing.title_az}" üçün ${price} ₼ təklif etdi`,
+          is_read:     false,
+        })
+        console.log('[submitOffer] admin message:', { msgError })
+      }
+
       window.dispatchEvent(new CustomEvent('notif-changed'))
       setMyOffer(offer as OfferRow)
     }
@@ -216,9 +241,9 @@ export default function ListingClient({ id }: { id: string }) {
     await supabase.from('notifications').insert({
       user_id: offer.buyer_id,
       type:    'offer_accepted',
-      title:   'Təklifiniz qəbul edildi!',
-      body:    `${listing?.title_az} — ${offer.offered_price} ₼ qiymətiniz qəbul edildi`,
-      link:    `/order/${id}?offer=${offer.id}`,
+      title:   'Təklifiniz qəbul edildi! ✓',
+      body:    `"${listing?.title_az}" üçün ${offer.offered_price} ₼ qəbul edildi. Al düyməsinə basın.`,
+      link:    `/listing/${id}`,
     })
     window.dispatchEvent(new CustomEvent('notif-changed'))
     setSellerOffers(s => s.filter(o => o.id !== offer.id))
@@ -232,7 +257,7 @@ export default function ListingClient({ id }: { id: string }) {
       user_id: offer.buyer_id,
       type:    'offer_rejected',
       title:   'Təklifiniz rədd edildi',
-      body:    `${listing?.title_az} elanındakı ${offer.offered_price} ₼ təklifiniz rədd edildi`,
+      body:    'Yeni qiymət təklif edə bilərsiniz.',
       link:    `/listing/${id}`,
     })
     window.dispatchEvent(new CustomEvent('notif-changed'))
@@ -248,8 +273,8 @@ export default function ListingClient({ id }: { id: string }) {
     await supabase.from('notifications').insert({
       user_id: offer.buyer_id,
       type:    'offer_countered',
-      title:   'Əks-təklif aldınız',
-      body:    `${listing?.title_az} — satıcı ${counterPrice} ₼ əks-təklif etdi`,
+      title:   'Satıcı əks-təklif verdi',
+      body:    `Satıcı ${counterPrice} ₼ təklif edir.`,
       link:    `/listing/${id}`,
     })
     window.dispatchEvent(new CustomEvent('notif-changed'))

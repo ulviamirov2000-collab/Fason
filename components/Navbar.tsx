@@ -239,23 +239,37 @@ export default function Navbar() {
                   {notifs.length === 0 ? (
                     <div className="px-4 py-6 text-center text-sm text-gray-400">Bildiriş yoxdur</div>
                   ) : (
-                    notifs.map(n => (
-                      <button
-                        key={n.id}
-                        onClick={() => markNotifRead(n.id, n.link)}
-                        className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 flex gap-3 items-start"
-                        style={{ backgroundColor: n.is_read ? 'white' : '#FFF5F8' }}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold truncate" style={{ color: '#1a1040' }}>{n.title}</p>
-                          {n.body && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.body}</p>}
-                          <p className="text-xs text-gray-300 mt-1">{new Date(n.created_at).toLocaleDateString('az-AZ')}</p>
-                        </div>
-                        {!n.is_read && (
-                          <div className="w-2 h-2 rounded-full mt-1 flex-shrink-0" style={{ backgroundColor: '#FF2D78' }} />
-                        )}
-                      </button>
-                    ))
+                    notifs.map(n => {
+                      const typeStyle =
+                        n.type === 'offer_accepted' ? { icon: '✓', color: '#10b981', bg: '#f0fdf4' } :
+                        n.type === 'offer_rejected' ? { icon: '✗', color: '#ef4444', bg: '#fef2f2' } :
+                        n.type === 'offer_countered' ? { icon: '↩', color: '#f97316', bg: '#fff7ed' } :
+                        n.type === 'offer'          ? { icon: '💰', color: '#FF2D78', bg: '#FFF5F8' } :
+                                                      { icon: '🔔', color: '#6b7280', bg: 'white'   }
+                      return (
+                        <button
+                          key={n.id}
+                          onClick={() => markNotifRead(n.id, n.link)}
+                          className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 flex gap-3 items-start"
+                          style={{ backgroundColor: n.is_read ? 'white' : typeStyle.bg }}
+                        >
+                          <div
+                            className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5"
+                            style={{ backgroundColor: typeStyle.bg, color: typeStyle.color, border: `1.5px solid ${typeStyle.color}` }}
+                          >
+                            {typeStyle.icon}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold" style={{ color: typeStyle.color }}>{n.title}</p>
+                            {n.body && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.body}</p>}
+                            <p className="text-xs text-gray-300 mt-1">{new Date(n.created_at).toLocaleDateString('az-AZ')}</p>
+                          </div>
+                          {!n.is_read && (
+                            <div className="w-2 h-2 rounded-full mt-1 flex-shrink-0" style={{ backgroundColor: typeStyle.color }} />
+                          )}
+                        </button>
+                      )
+                    })
                   )}
                 </div>
               )}

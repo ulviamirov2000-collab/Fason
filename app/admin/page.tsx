@@ -5,16 +5,9 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
 import ChatDrawer from '@/components/ChatDrawer'
+import MessagesUI from '@/components/MessagesUI'
 
 const ADMIN_EMAIL = 'ulvi.amirov.2000@gmail.com'
-
-// ── Suspicious content detection ──────────────────────────────────────────────
-const PHONE_RE  = /(\+?\d[\d\s\-().]{6,}\d)/
-const LINK_RE   = /(https?:\/\/|www\.|\b(?:t\.me|wa\.me|instagram\.com|whatsapp)\b)/i
-
-function isSuspicious(text: string) {
-  return PHONE_RE.test(text) || LINK_RE.test(text)
-}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Convo = {
@@ -100,11 +93,6 @@ export default function AdminPage() {
   const [tab,     setTab]     = useState<'messages' | 'listings' | 'users' | 'orders' | 'reports'>('messages')
   const [loading, setLoading] = useState(true)
 
-  // Messages tab
-  const [convos,     setConvos]     = useState<Convo[]>([])
-  const [openConvo,  setOpenConvo]  = useState<Convo | null>(null)
-  const [msgSearch,  setMsgSearch]  = useState('')
-
   // Listings tab
   const [listings,   setListings]   = useState<AdminListing[]>([])
   const [listSearch, setListSearch] = useState('')
@@ -134,81 +122,6 @@ export default function AdminPage() {
   }, [router])
 
   // ── Data loaders ─────────────────────────────────────────────────────────────
-  const loadMessages = useCallback(async () => {
-    setLoading(true)
-
-    const { data: msgs } = await supabase
-      .from('messages')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(1000)
-
-    if (!msgs) { setLoading(false); return }
-
-    const userIds    = [...new Set([...msgs.map(m => m.sender_id), ...msgs.map(m => m.receiver_id)])]
-    const listingIds = [...new Set(msgs.map(m => m.listing_id))]
-
-    const [{ data: usersData }, { data: listingsData }] = await Promise.all([
-      supabase.from('users').select('id, full_name, email').in('id', userIds),
-      supabase.from('listings').select('id, title_az, images').in('id', listingIds),
-    ])
-
-    const uMap = new Map((usersData ?? []).map(u => [u.id, u]))
-    const lMap = new Map((listingsData ?? []).map(l => [l.id, l]))
-
-    // Group into conversations: (listing_id, sorted pair of user ids)
-    const convMap = new Map<string, Convo>()
-
-    // msgs are sorted newest-first — iterate reversed to build in order
-    for (const m of [...msgs].reverse()) {
-      const pair = [m.sender_id, m.receiver_id].sort().join(':')
-      const key  = `${m.listing_id}::${pair}`
-
-      const flagged = isSuspicious(m.text)
-      const msgRow: MsgRow = {
-        id:         m.id,
-        sender_id:  m.sender_id,
-        text:       m.text,
-        created_at: m.created_at,
-        flagged,
-      }
-
-      if (!convMap.has(key)) {
-        const listing = lMap.get(m.listing_id)
-        const senderU   = uMap.get(m.sender_id)
-        const receiverU = uMap.get(m.receiver_id)
-        const sName = (u: typeof senderU) => u?.full_name || u?.email?.split('@')[0] || 'İstifadəçi'
-
-        // Determine buyer vs seller heuristically: first sender is buyer
-        convMap.set(key, {
-          key,
-          listing_id:    m.listing_id,
-          listing_title: listing?.title_az ?? 'Elan',
-          listing_image: (listing?.images as string[])?.[0] ?? null,
-          buyer_id:      m.sender_id,
-          buyer_name:    sName(senderU),
-          seller_id:     m.receiver_id,
-          seller_name:   sName(receiverU),
-          last_message:  m.text,
-          last_at:       m.created_at,
-          msg_count:     0,
-          flagged:       false,
-          messages:      [],
-        })
-      }
-
-      const c = convMap.get(key)!
-      c.messages.push(msgRow)
-      c.last_message = m.text
-      c.last_at      = m.created_at
-      c.msg_count++
-      if (flagged) c.flagged = true
-    }
-
-    setConvos([...convMap.values()].sort((a, b) => b.last_at.localeCompare(a.last_at)))
-    setLoading(false)
-  }, [])
-
   const loadListings = useCallback(async () => {
     setLoading(true)
     const { data } = await supabase
@@ -305,11 +218,10 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!authed) return
-    if (tab === 'messages') loadMessages()
     if (tab === 'listings') loadListings()
     if (tab === 'users')    loadUsers()
     if (tab === 'orders')   loadOrders()
-  }, [authed, tab, loadMessages, loadListings, loadUsers, loadOrders])
+  }, [authed, tab, loadListings, loadUsers, loadOrders])
 
   // Fetch unseen order count for badge (on mount)
   useEffect(() => {
@@ -357,18 +269,6 @@ export default function AdminPage() {
     setUnseenCount(0)
   }
 
-  async function deleteMessage(id: string) {
-    await supabase.from('messages').delete().eq('id', id)
-    if (openConvo) {
-      setOpenConvo(prev => prev ? { ...prev, messages: prev.messages.filter(m => m.id !== id) } : null)
-    }
-    setConvos(prev => prev.map(c => ({
-      ...c,
-      messages: c.messages.filter(m => m.id !== id),
-      flagged: c.messages.filter(m => m.id !== id).some(m => m.flagged),
-    })))
-  }
-
   // ── Guard ─────────────────────────────────────────────────────────────────────
   if (!authed) return null
 
@@ -381,13 +281,6 @@ export default function AdminPage() {
   ] as const
 
   // ── Filtered data ─────────────────────────────────────────────────────────────
-  const filteredConvos = convos.filter(c =>
-    !msgSearch ||
-    c.buyer_name.toLowerCase().includes(msgSearch.toLowerCase()) ||
-    c.seller_name.toLowerCase().includes(msgSearch.toLowerCase()) ||
-    c.listing_title.toLowerCase().includes(msgSearch.toLowerCase())
-  )
-
   const filteredListings = listings.filter(l =>
     !listSearch ||
     l.title_az.toLowerCase().includes(listSearch.toLowerCase()) ||
@@ -472,122 +365,9 @@ export default function AdminPage() {
           )}
 
           {/* ── MESSAGES TAB ── */}
-          {!loading && tab === 'messages' && (
-            <div className="flex gap-6 h-full">
-
-              {/* Conversation list */}
-              <div className="flex flex-col gap-3" style={{ width: openConvo ? '380px' : '100%', flexShrink: 0 }}>
-                <input
-                  type="text"
-                  value={msgSearch}
-                  onChange={e => setMsgSearch(e.target.value)}
-                  placeholder="İstifadəçi adı və ya elan axtar..."
-                  className="w-full px-4 py-2.5 rounded-xl text-sm outline-none"
-                  style={{ border: '1.5px solid #e5e7eb', backgroundColor: 'white' }}
-                />
-                <p className="text-xs text-gray-400">{filteredConvos.length} söhbət</p>
-
-                <div className="flex flex-col gap-2">
-                  {filteredConvos.map(c => (
-                    <button
-                      key={c.key}
-                      onClick={() => setOpenConvo(openConvo?.key === c.key ? null : c)}
-                      className="flex items-center gap-3 p-3 rounded-2xl text-left transition-all hover:shadow-md"
-                      style={{
-                        backgroundColor: openConvo?.key === c.key ? '#fff0f5' : 'white',
-                        border: `1.5px solid ${c.flagged ? '#FF2D78' : openConvo?.key === c.key ? '#FF2D78' : '#e5e7eb'}`,
-                      }}
-                    >
-                      {/* Listing image */}
-                      <div className="w-10 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100">
-                        {c.listing_image ? (
-                          <Image src={c.listing_image} alt={c.listing_title} width={40} height={48} className="object-cover w-full h-full" unoptimized />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-lg">👗</div>
-                        )}
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-xs font-semibold text-gray-800 truncate max-w-[140px]">{c.listing_title}</span>
-                          {c.flagged && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white flex-shrink-0" style={{ backgroundColor: '#FF2D78' }}>
-                              ⚠ Şübhəli
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-gray-500 truncate mt-0.5">
-                          {c.buyer_name} → {c.seller_name}
-                        </p>
-                        <p className="text-[11px] text-gray-400 truncate mt-0.5">{c.last_message}</p>
-                      </div>
-
-                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                        <span className="text-[10px] text-gray-400">{fmt(c.last_at)}</span>
-                        <span className="text-[10px] text-gray-400">{c.msg_count} mesaj</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Thread view */}
-              {openConvo && (
-                <div
-                  className="flex-1 flex flex-col rounded-2xl overflow-hidden"
-                  style={{ border: '1.5px solid #e5e7eb', backgroundColor: 'white' }}
-                >
-                  {/* Thread header */}
-                  <div
-                    className="flex items-center justify-between px-5 py-3 flex-shrink-0"
-                    style={{ borderBottom: '1px solid #f3f4f6', backgroundColor: '#f9fafb' }}
-                  >
-                    <div>
-                      <p className="font-semibold text-sm" style={{ color: '#1a1040' }}>{openConvo.listing_title}</p>
-                      <p className="text-xs text-gray-500">{openConvo.buyer_name} ↔ {openConvo.seller_name} · {openConvo.msg_count} mesaj</p>
-                    </div>
-                    <button
-                      onClick={() => setOpenConvo(null)}
-                      className="text-gray-400 hover:text-gray-700 text-xl leading-none"
-                    >
-                      ×
-                    </button>
-                  </div>
-
-                  {/* Messages */}
-                  <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2" style={{ backgroundColor: '#fafafa' }}>
-                    {openConvo.messages.map(m => {
-                      const isBuyer = m.sender_id === openConvo.buyer_id
-                      return (
-                        <div key={m.id} className={`flex ${isBuyer ? 'justify-start' : 'justify-end'} gap-2`}>
-                          <div
-                            className="max-w-[70%] px-4 py-2.5 rounded-2xl text-sm relative group"
-                            style={{
-                              backgroundColor: m.flagged ? '#fff0f5' : isBuyer ? '#f3f4f6' : '#1a1040',
-                              color: isBuyer ? '#1a1040' : 'white',
-                              border: m.flagged ? '1.5px solid #FF2D78' : 'none',
-                            }}
-                          >
-                            <p className="leading-snug">{m.text}</p>
-                            <div className="flex items-center justify-between gap-3 mt-1">
-                              <p className="text-[10px] opacity-60">{isBuyer ? openConvo.buyer_name : openConvo.seller_name} · {fmt(m.created_at)}</p>
-                              {m.flagged && <span className="text-[10px] font-bold" style={{ color: '#FF2D78' }}>⚠</span>}
-                            </div>
-                            {/* Delete button (admin only) */}
-                            <button
-                              onClick={() => deleteMessage(m.id)}
-                              className="absolute -top-2 -right-2 hidden group-hover:flex w-5 h-5 rounded-full items-center justify-center text-white text-xs"
-                              style={{ backgroundColor: '#FF2D78' }}
-                            >
-                              ×
-                            </button>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
+          {tab === 'messages' && adminUserId && (
+            <div style={{ height: 'calc(100vh - 160px)', minHeight: 500 }}>
+              <MessagesUI currentUserId={adminUserId} isAdmin={true} />
             </div>
           )}
 

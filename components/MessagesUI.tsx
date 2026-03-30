@@ -21,6 +21,7 @@ type Conversation = {
 
 type Props = {
   currentUserId: string
+  isAdmin?: boolean
 }
 
 function formatRelative(iso: string): string {
@@ -39,7 +40,7 @@ function formatTime(iso: string): string {
 
 const ADMIN_EMAIL = 'ulvi.amirov.2000@gmail.com'
 
-export default function MessagesUI({ currentUserId }: Props) {
+export default function MessagesUI({ currentUserId, isAdmin = false }: Props) {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeConv, setActiveConv] = useState<Conversation | null>(null)
   const [messages, setMessages] = useState<MessageRow[]>([])
@@ -58,18 +59,30 @@ export default function MessagesUI({ currentUserId }: Props) {
   useEffect(() => { activeConvRef.current = activeConv }, [activeConv])
 
   const loadConversations = useCallback(async () => {
-    if (!adminUserId) return
+    // Non-admin users: wait for adminUserId to filter only admin conversations
+    if (!isAdmin && !adminUserId) return
 
-    const { data: allMsgs } = await supabase
+    let query = supabase
       .from('messages')
       .select('*')
-      .or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`)
       .order('created_at', { ascending: false })
 
-    // Only show conversations where one party is admin
-    const filtered = (allMsgs ?? []).filter(m =>
-      m.sender_id === adminUserId || m.receiver_id === adminUserId
-    )
+    if (isAdmin) {
+      // Admin: fetch ALL messages across the platform
+      query = query.limit(2000)
+    } else {
+      // Regular user: only messages involving current user AND admin
+      query = query.or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`)
+    }
+
+    const { data: allMsgs } = await query
+
+    // For non-admin: filter to only conversations involving admin
+    const filtered = isAdmin
+      ? (allMsgs ?? [])
+      : (allMsgs ?? []).filter(m =>
+          m.sender_id === adminUserId || m.receiver_id === adminUserId
+        )
 
     if (filtered.length === 0) {
       setConversations([])
@@ -122,7 +135,7 @@ export default function MessagesUI({ currentUserId }: Props) {
 
     setConversations([...convMap.values()])
     setLoading(false)
-  }, [currentUserId, adminUserId])
+  }, [currentUserId, adminUserId, isAdmin])
 
   useEffect(() => { loadConversations() }, [loadConversations])
 
