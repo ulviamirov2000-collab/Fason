@@ -161,34 +161,47 @@ export default function FilterBar({
   useEffect(() => { setMinDraft(priceMin) },   [priceMin])
   useEffect(() => { setMaxDraft(priceMax) },   [priceMax])
 
-  // Close when page scrolls or resizes (dropdown would float away from button)
+  // Close when page scrolls or resizes (dropdown would float away from button).
+  // Delayed via rAF so the soft-keyboard resize that fires when an input autofocuses
+  // doesn't immediately close the dropdown on mobile.
   useEffect(() => {
     if (!open) return
     function dismiss() { setOpen(null); setDropPos(null) }
-    window.addEventListener('scroll', dismiss, { passive: true, capture: true })
-    window.addEventListener('resize', dismiss)
+    let rafId: number
+    rafId = requestAnimationFrame(() => {
+      window.addEventListener('scroll', dismiss, { passive: true, capture: true })
+      window.addEventListener('resize', dismiss)
+    })
     return () => {
+      cancelAnimationFrame(rafId)
       window.removeEventListener('scroll', dismiss, { capture: true })
       window.removeEventListener('resize', dismiss)
     }
   }, [open])
 
-  // Close on outside click (mousedown so it fires before the blur events)
+  // Close on outside click/tap — mousedown + touchstart for mobile reliability.
+  // Checks both the panel and the trigger button so neither closes the dropdown.
   useEffect(() => {
     if (!open) return
-    function handler(e: MouseEvent) {
+    function handler(e: MouseEvent | TouchEvent) {
+      const target = e.type === 'touchstart'
+        ? (e as TouchEvent).touches[0]?.target as Node
+        : (e as MouseEvent).target as Node
       const panel = document.getElementById('filterbar-dropdown-panel')
       const btn   = open ? refMap[open]?.current : null
       if (
-        panel && !panel.contains(e.target as Node) &&
-        btn   && !btn.contains(e.target as Node)
-      ) {
-        setOpen(null)
-        setDropPos(null)
-      }
+        panel && panel.contains(target) ||
+        btn   && btn.contains(target)
+      ) return
+      setOpen(null)
+      setDropPos(null)
     }
     document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    document.addEventListener('touchstart', handler, { passive: true })
+    return () => {
+      document.removeEventListener('mousedown', handler)
+      document.removeEventListener('touchstart', handler)
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
@@ -242,7 +255,6 @@ export default function FilterBar({
                 onChange={e => setBrandDraft(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') { onBrandChange(brandDraft.trim()); setOpen(null) } }}
                 placeholder="Brend axtar..."
-                autoFocus
                 className="w-full px-3 py-2 rounded-xl text-sm outline-none"
                 style={{ border: '1.5px solid #e5e7eb' }}
               />
