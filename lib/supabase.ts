@@ -23,6 +23,7 @@ export type Database = {
           full_name: string | null
           avatar_url: string | null
           is_seller: boolean
+          is_banned: boolean
           created_at: string
         }
       }
@@ -54,14 +55,32 @@ export type Database = {
           created_at: string
         }
       }
+      offers: {
+        Row: {
+          id: string
+          listing_id: string
+          buyer_id: string
+          seller_id: string
+          offered_price: number
+          status: 'pending' | 'accepted' | 'rejected' | 'countered'
+          counter_price: number | null
+          created_at: string
+        }
+      }
       orders: {
         Row: {
           id: string
           listing_id: string
           buyer_id: string
           seller_id: string
+          offer_id: string | null
           status: 'pending' | 'confirmed' | 'delivered' | 'cancelled'
-          amount: number
+          final_price: number
+          delivery_needed: boolean
+          delivery_address: string | null
+          phone: string | null
+          note: string | null
+          is_seen: boolean
           created_at: string
         }
       }
@@ -80,7 +99,9 @@ export type Database = {
   }
 }
 
-export type UserRow = Database['public']['Tables']['users']['Row']
+export type UserRow    = Database['public']['Tables']['users']['Row']
 export type ListingRow = Database['public']['Tables']['listings']['Row']
 export type MessageRow = Database['public']['Tables']['messages']['Row']
-export type BasketRow = Database['public']['Tables']['baskets']['Row']
+export type BasketRow  = Database['public']['Tables']['baskets']['Row']
+export type OfferRow   = Database['public']['Tables']['offers']['Row']
+export type OrderRow   = Database['public']['Tables']['orders']['Row']

@@ -65,6 +65,23 @@ type AdminUser = {
   message_count: number
 }
 
+type AdminOrder = {
+  id:               string
+  listing_title:    string
+  listing_image:    string | null
+  listing_id:       string
+  buyer_name:       string
+  seller_name:      string
+  final_price:      number
+  delivery_needed:  boolean
+  delivery_address: string | null
+  phone:            string | null
+  note:             string | null
+  status:           string
+  is_seen:          boolean
+  created_at:       string
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(iso: string) {
   return new Date(iso).toLocaleDateString('az-AZ', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
@@ -77,7 +94,7 @@ function fmtDate(iso: string) {
 export default function AdminPage() {
   const router = useRouter()
   const [authed,  setAuthed]  = useState(false)
-  const [tab,     setTab]     = useState<'messages' | 'listings' | 'users' | 'reports'>('messages')
+  const [tab,     setTab]     = useState<'messages' | 'listings' | 'users' | 'orders' | 'reports'>('messages')
   const [loading, setLoading] = useState(true)
 
   // Messages tab
@@ -92,6 +109,10 @@ export default function AdminPage() {
   // Users tab
   const [users,      setUsers]      = useState<AdminUser[]>([])
   const [userSearch, setUserSearch] = useState('')
+
+  // Orders tab
+  const [orders,      setOrders]      = useState<AdminOrder[]>([])
+  const [unseenCount, setUnseenCount] = useState(0)
 
   // ── Auth check ───────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -241,12 +262,54 @@ export default function AdminPage() {
     setLoading(false)
   }, [])
 
+  const loadOrders = useCallback(async () => {
+    setLoading(true)
+    const { data } = await supabase
+      .from('orders')
+      .select('*, listings:listing_id(id, title_az, images), buyers:buyer_id(full_name, email), sellers:seller_id(full_name, email)')
+      .order('created_at', { ascending: false })
+      .limit(200)
+
+    if (data) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setOrders(data.map((o: any) => ({
+        id:               o.id,
+        listing_id:       o.listing_id,
+        listing_title:    o.listings?.title_az ?? 'Elan',
+        listing_image:    o.listings?.images?.[0] ?? null,
+        buyer_name:       o.buyers?.full_name || o.buyers?.email?.split('@')[0] || 'Alıcı',
+        seller_name:      o.sellers?.full_name || o.sellers?.email?.split('@')[0] || 'Satıcı',
+        final_price:      o.final_price,
+        delivery_needed:  o.delivery_needed ?? false,
+        delivery_address: o.delivery_address,
+        phone:            o.phone,
+        note:             o.note,
+        status:           o.status,
+        is_seen:          o.is_seen ?? true,
+        created_at:       o.created_at,
+      })))
+      setUnseenCount(data.filter((o: any) => !o.is_seen).length)
+    }
+    setLoading(false)
+  }, [])
+
   useEffect(() => {
     if (!authed) return
     if (tab === 'messages') loadMessages()
     if (tab === 'listings') loadListings()
     if (tab === 'users')    loadUsers()
-  }, [authed, tab, loadMessages, loadListings, loadUsers])
+    if (tab === 'orders')   loadOrders()
+  }, [authed, tab, loadMessages, loadListings, loadUsers, loadOrders])
+
+  // Fetch unseen order count for badge (on mount)
+  useEffect(() => {
+    if (!authed) return
+    supabase
+      .from('orders')
+      .select('id', { count: 'exact', head: true })
+      .eq('is_seen', false)
+      .then(({ count }) => setUnseenCount(count ?? 0))
+  }, [authed])
 
   // ── Actions ───────────────────────────────────────────────────────────────────
   async function deleteListing(id: string) {
@@ -272,6 +335,18 @@ export default function AdminPage() {
     setUsers(prev => prev.map(u => u.id === user.id ? { ...u, is_banned: newBanned } : u))
   }
 
+  async function updateOrderStatus(id: string, status: string) {
+    await supabase.from('orders').update({ status, is_seen: true }).eq('id', id)
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, status, is_seen: true } : o))
+    setUnseenCount(prev => Math.max(0, prev - 1))
+  }
+
+  async function markOrdersSeen() {
+    await supabase.from('orders').update({ is_seen: true }).eq('is_seen', false)
+    setOrders(prev => prev.map(o => ({ ...o, is_seen: true })))
+    setUnseenCount(0)
+  }
+
   async function deleteMessage(id: string) {
     await supabase.from('messages').delete().eq('id', id)
     if (openConvo) {
@@ -288,10 +363,11 @@ export default function AdminPage() {
   if (!authed) return null
 
   const TABS = [
-    { key: 'messages', icon: '💬', label: 'Mesajlar' },
-    { key: 'listings', icon: '📦', label: 'Elanlar'  },
-    { key: 'users',    icon: '👥', label: 'İstifadəçilər' },
-    { key: 'reports',  icon: '🚨', label: 'Şikayətlər' },
+    { key: 'messages', icon: '💬', label: 'Mesajlar',      badge: 0 },
+    { key: 'listings', icon: '📦', label: 'Elanlar',       badge: 0 },
+    { key: 'users',    icon: '👥', label: 'İstifadəçilər', badge: 0 },
+    { key: 'orders',   icon: '🛍', label: 'Sifarişlər',    badge: unseenCount },
+    { key: 'reports',  icon: '🚨', label: 'Şikayətlər',    badge: 0 },
   ] as const
 
   // ── Filtered data ─────────────────────────────────────────────────────────────
@@ -340,7 +416,15 @@ export default function AdminPage() {
             }
           >
             <span>{t.icon}</span>
-            <span>{t.label}</span>
+            <span className="flex-1">{t.label}</span>
+            {t.badge > 0 && (
+              <span
+                className="min-w-[18px] h-[18px] rounded-full flex items-center justify-center text-[10px] font-bold text-white px-1"
+                style={{ backgroundColor: tab === t.key ? 'white' : '#FF2D78', color: tab === t.key ? '#FF2D78' : 'white' }}
+              >
+                {t.badge}
+              </span>
+            )}
           </button>
         ))}
 
@@ -709,6 +793,146 @@ export default function AdminPage() {
                 </table>
                 {filteredUsers.length === 0 && (
                   <div className="py-12 text-center text-sm text-gray-400">İstifadəçi tapılmadı</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── ORDERS TAB ── */}
+          {!loading && tab === 'orders' && (
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-400">{orders.length} sifariş</span>
+                {unseenCount > 0 && (
+                  <button
+                    onClick={markOrdersSeen}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-full transition-colors hover:bg-gray-100"
+                    style={{ border: '1px solid #e5e7eb', color: '#6b7280' }}
+                  >
+                    Hamısını oxunmuş işarələ
+                  </button>
+                )}
+              </div>
+
+              <div
+                className="rounded-2xl overflow-hidden"
+                style={{ border: '1.5px solid #e5e7eb', backgroundColor: 'white' }}
+              >
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid #f3f4f6' }}>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Elan</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Alıcı</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Qiymət</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Kuryer</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Əlaqə</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Status</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Tarix</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Əməliyyat</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orders.map((o, i) => (
+                      <tr
+                        key={o.id}
+                        style={{
+                          borderBottom: i < orders.length - 1 ? '1px solid #f9fafb' : 'none',
+                          backgroundColor: !o.is_seen ? '#fffbeb' : 'transparent',
+                        }}
+                      >
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
+                              {o.listing_image ? (
+                                <Image src={o.listing_image} alt={o.listing_title} width={32} height={40} className="object-cover w-full h-full" unoptimized />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-sm">👗</div>
+                              )}
+                            </div>
+                            <a
+                              href={`/listing/${o.listing_id}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-xs font-semibold hover:underline max-w-[120px] line-clamp-2"
+                              style={{ color: '#1a1040' }}
+                            >
+                              {o.listing_title}
+                            </a>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-600">
+                          <div>{o.buyer_name}</div>
+                          {o.note && <div className="text-gray-400 mt-0.5 max-w-[120px] truncate">📝 {o.note}</div>}
+                        </td>
+                        <td className="px-4 py-3 text-xs font-bold" style={{ color: '#FF2D78' }}>
+                          {o.final_price} ₼
+                        </td>
+                        <td className="px-4 py-3 text-xs">
+                          {o.delivery_needed ? (
+                            <div>
+                              <span className="font-semibold text-green-600">Hə</span>
+                              {o.delivery_address && (
+                                <div className="text-gray-400 mt-0.5 max-w-[120px] truncate">{o.delivery_address}</div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">Xeyr</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-600">{o.phone}</td>
+                        <td className="px-4 py-3">
+                          <span
+                            className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                            style={
+                              o.status === 'pending'   ? { backgroundColor: '#fffbeb', color: '#d97706' } :
+                              o.status === 'confirmed' ? { backgroundColor: '#eff6ff', color: '#3b82f6' } :
+                              o.status === 'delivered' ? { backgroundColor: '#f0fdf4', color: '#16a34a' } :
+                                                         { backgroundColor: '#fef2f2', color: '#ef4444' }
+                            }
+                          >
+                            {o.status === 'pending'   ? 'Gözlənilir' :
+                             o.status === 'confirmed' ? 'Təsdiqləndi' :
+                             o.status === 'delivered' ? 'Çatdırıldı'  : 'Ləğv edildi'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-400">{fmtDate(o.created_at)}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-col gap-1.5">
+                            {o.status === 'pending' && (
+                              <button
+                                onClick={() => updateOrderStatus(o.id, 'confirmed')}
+                                className="text-[11px] font-semibold px-2.5 py-1 rounded-lg hover:bg-blue-50 transition-colors"
+                                style={{ color: '#3b82f6', border: '1px solid #bfdbfe' }}
+                              >
+                                Təsdiqlə
+                              </button>
+                            )}
+                            {(o.status === 'pending' || o.status === 'confirmed') && (
+                              <button
+                                onClick={() => updateOrderStatus(o.id, 'delivered')}
+                                className="text-[11px] font-semibold px-2.5 py-1 rounded-lg hover:bg-green-50 transition-colors"
+                                style={{ color: '#16a34a', border: '1px solid #bbf7d0' }}
+                              >
+                                Çatdırıldı
+                              </button>
+                            )}
+                            {o.status !== 'cancelled' && o.status !== 'delivered' && (
+                              <button
+                                onClick={() => updateOrderStatus(o.id, 'cancelled')}
+                                className="text-[11px] font-semibold px-2.5 py-1 rounded-lg hover:bg-red-50 transition-colors"
+                                style={{ color: '#ef4444', border: '1px solid #fecaca' }}
+                              >
+                                Ləğv et
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {orders.length === 0 && (
+                  <div className="py-12 text-center text-sm text-gray-400">Hələ sifariş yoxdur</div>
                 )}
               </div>
             </div>
