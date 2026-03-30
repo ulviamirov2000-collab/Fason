@@ -49,7 +49,7 @@ const MEGA_SUBS: Record<string, { col1: string[]; col2: string[] }> = {
     col2: ['Hündürdaban ayaqqabı', 'Uzunboğaz ayaqqabı', 'Sandal', 'Ev ayaqqabısı'],
   },
   Çanta: {
-    col1: ['Əl çantası', 'Sırt çantası'],
+    col1: ['Əl çantası', 'Bel çantası'],
     col2: ['Kiçik əl çantası', 'Çətir'],
   },
   Aksesuar: {
