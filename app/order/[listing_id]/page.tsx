@@ -25,6 +25,7 @@ export default function OrderPage({ params }: { params: Promise<{ listing_id: st
   const [loading,       setLoading]       = useState(true)
   const [submitting,    setSubmitting]    = useState(false)
   const [done,          setDone]          = useState(false)
+  const [orderId,       setOrderId]       = useState<string | null>(null)
 
   const [form, setForm] = useState({
     delivery:  false,
@@ -72,7 +73,7 @@ export default function OrderPage({ params }: { params: Promise<{ listing_id: st
       ? (offer.status === 'accepted' ? offer.offered_price : offer.counter_price ?? listing.price)
       : listing.price
 
-    await supabase.from('orders').insert({
+    const { data: orderData } = await supabase.from('orders').insert({
       listing_id:       listing.id,
       buyer_id:         currentUserId,
       seller_id:        listing.users.id,
@@ -84,8 +85,9 @@ export default function OrderPage({ params }: { params: Promise<{ listing_id: st
       phone:            form.phone.trim(),
       note:             form.note.trim() || null,
       is_seen:          false,
-    })
+    }).select('id').single()
 
+    setOrderId(orderData?.id ?? null)
     setSubmitting(false)
     setDone(true)
   }
@@ -132,10 +134,30 @@ export default function OrderPage({ params }: { params: Promise<{ listing_id: st
             <p className="text-xs text-gray-500">📦 Kuryer: {form.address}</p>
           )}
         </div>
+        <button
+          onClick={async () => {
+            const { data: adminData } = await supabase
+              .from('users').select('id').eq('email', 'ulvi.amirov.2000@gmail.com').single()
+            if (adminData && currentUserId) {
+              await supabase.from('messages').insert({
+                listing_id: listing.id,
+                sender_id:  currentUserId,
+                receiver_id: adminData.id,
+                text: `Salam, ${listing.title_az} üçün sifariş verdim. Sifariş №: ${orderId ?? '—'}`,
+                is_read: false,
+              })
+            }
+            router.push('/messages')
+          }}
+          className="w-full py-3 rounded-2xl font-bold text-white"
+          style={{ backgroundColor: '#FF2D78', border: '2px solid #1a1040', boxShadow: '3px 3px 0 #1a1040' }}
+        >
+          💬 Adminlə əlaqə saxla
+        </button>
         <Link
           href="/"
-          className="px-8 py-3 rounded-full font-bold text-white"
-          style={{ backgroundColor: '#FF2D78', border: '2px solid #1a1040' }}
+          className="text-sm underline"
+          style={{ color: '#9ca3af' }}
         >
           Ana səhifəyə qayıt
         </Link>
