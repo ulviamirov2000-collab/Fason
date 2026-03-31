@@ -81,7 +81,7 @@ export default function Navbar() {
     return () => clearInterval(interval)
   }, [user])
 
-  // Notifications: fetch + poll
+  // Notifications: fetch + poll + realtime
   useEffect(() => {
     if (!user) { setNotifCount(0); setNotifs([]); return }
 
@@ -102,7 +102,32 @@ export default function Navbar() {
     fetchNotifs()
     const interval = setInterval(fetchNotifs, 20_000)
     window.addEventListener('notif-changed', fetchNotifs)
-    return () => { clearInterval(interval); window.removeEventListener('notif-changed', fetchNotifs) }
+
+    // Realtime: instant update when a new notification arrives for this user
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    try {
+      channel = supabase
+        .channel(`notifs:${user.id}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+          () => { fetchNotifs() }
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') return
+          if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
+            console.warn('[Navbar] notif channel', status)
+          }
+        })
+    } catch (err) {
+      console.warn('[Navbar] failed to subscribe to notifs channel', err)
+    }
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('notif-changed', fetchNotifs)
+      if (channel) supabase.removeChannel(channel)
+    }
   }, [user])
 
   // Close notif dropdown when clicking outside
@@ -241,11 +266,12 @@ export default function Navbar() {
                   ) : (
                     notifs.map(n => {
                       const typeStyle =
-                        n.type === 'offer_accepted' ? { icon: '✓', color: '#10b981', bg: '#f0fdf4' } :
-                        n.type === 'offer_rejected' ? { icon: '✗', color: '#ef4444', bg: '#fef2f2' } :
+                        n.type === 'offer_accepted'  ? { icon: '✓', color: '#10b981', bg: '#f0fdf4' } :
+                        n.type === 'offer_rejected'  ? { icon: '✗', color: '#ef4444', bg: '#fef2f2' } :
                         n.type === 'offer_countered' ? { icon: '↩', color: '#f97316', bg: '#fff7ed' } :
-                        n.type === 'offer'          ? { icon: '💰', color: '#FF2D78', bg: '#FFF5F8' } :
-                                                      { icon: '🔔', color: '#6b7280', bg: 'white'   }
+                        n.type === 'offer_received'  ? { icon: '💰', color: '#FF2D78', bg: '#FFF5F8' } :
+                        n.type === 'offer'           ? { icon: '💰', color: '#FF2D78', bg: '#FFF5F8' } :
+                                                       { icon: '🔔', color: '#6b7280', bg: 'white'   }
                       return (
                         <button
                           key={n.id}
