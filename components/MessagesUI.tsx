@@ -62,22 +62,16 @@ export default function MessagesUI({ currentUserId, isAdmin = false }: Props) {
     // Non-admin users: wait for adminUserId to filter only admin conversations
     if (!isAdmin && !adminUserId) return
 
-    let query = supabase
+    // Always fetch only messages involving currentUserId
+    const { data: allMsgs } = await supabase
       .from('messages')
       .select('*')
+      .or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`)
       .order('created_at', { ascending: false })
+      .limit(1000)
 
-    if (isAdmin) {
-      // Admin: fetch ALL messages across the platform
-      query = query.limit(2000)
-    } else {
-      // Regular user: only messages involving current user AND admin
-      query = query.or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`)
-    }
-
-    const { data: allMsgs } = await query
-
-    // For non-admin: filter to only conversations involving admin
+    // Regular users: only show conversations where admin is the other party
+    // Admin (isAdmin=true): show all their conversations unfiltered
     const filtered = isAdmin
       ? (allMsgs ?? [])
       : (allMsgs ?? []).filter(m =>
