@@ -72,11 +72,13 @@ export default function MessagesUI({ currentUserId, isAdmin = false }: Props) {
 
     // Regular users: only show conversations where admin is the other party
     // Admin (isAdmin=true): show all their conversations unfiltered
-    const filtered = isAdmin
+    const withAdminFilter = isAdmin
       ? (allMsgs ?? [])
       : (allMsgs ?? []).filter(m =>
           m.sender_id === adminUserId || m.receiver_id === adminUserId
         )
+    // Filter out offer system messages from conversation list
+    const filtered = withAdminFilter.filter(m => !m.text.startsWith('💰 Yeni təklif:'))
 
     if (filtered.length === 0) {
       setConversations([])
@@ -195,7 +197,7 @@ export default function MessagesUI({ currentUserId, isAdmin = false }: Props) {
       )
       .order('created_at', { ascending: true })
 
-    setMessages(data ?? [])
+    setMessages((data ?? []).filter(m => !m.text.startsWith('💰 Yeni təklif:')))
 
     const unreadIds = (data ?? []).filter((m) => m.receiver_id === currentUserId && !m.is_read).map((m) => m.id)
     if (unreadIds.length > 0) {
@@ -238,6 +240,31 @@ export default function MessagesUI({ currentUserId, isAdmin = false }: Props) {
     }
   }
 
+  async function deleteConversation(conv: Conversation) {
+    if (!confirm('Bu söhbəti silmək istədiyinizə əminsiniz?')) return
+    await supabase
+      .from('messages')
+      .delete()
+      .eq('listing_id', conv.listingId)
+      .or(
+        `and(sender_id.eq.${currentUserId},receiver_id.eq.${conv.otherUserId}),` +
+        `and(sender_id.eq.${conv.otherUserId},receiver_id.eq.${currentUserId})`
+      )
+    setConversations(prev => prev.filter(c => c.key !== conv.key))
+    if (activeConv?.key === conv.key) { setActiveConv(null); setMessages([]) }
+  }
+
+  async function deleteAllConversations() {
+    if (!confirm('Bütün mesajları silmək istədiyinizə əminsiniz?')) return
+    await supabase
+      .from('messages')
+      .delete()
+      .or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`)
+    setConversations([])
+    setActiveConv(null)
+    setMessages([])
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -254,12 +281,21 @@ export default function MessagesUI({ currentUserId, isAdmin = false }: Props) {
         style={{ border: '2px solid #1a1040', backgroundColor: 'white' }}
       >
         <div
-          className="px-4 py-3 flex-shrink-0"
+          className="px-4 py-3 flex-shrink-0 flex items-center justify-between"
           style={{ backgroundColor: '#FAF7F2', borderBottom: '2px solid #1a1040' }}
         >
           <h2 className="font-bold text-base" style={{ fontFamily: 'var(--font-unbounded)', color: '#1a1040' }}>
             Mesajlar
           </h2>
+          {isAdmin && conversations.length > 0 && (
+            <button
+              onClick={deleteAllConversations}
+              className="text-xs font-semibold hover:text-red-500 transition-colors"
+              style={{ color: '#9ca3af' }}
+            >
+              🗑 Hamısını sil
+            </button>
+          )}
         </div>
 
         {conversations.length === 0 ? (
@@ -271,12 +307,12 @@ export default function MessagesUI({ currentUserId, isAdmin = false }: Props) {
         ) : (
           <div className="flex-1 overflow-y-auto">
             {conversations.map((conv) => (
-              <button
+              <div
                 key={conv.key}
-                onClick={() => selectConversation(conv)}
-                className="w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 border-b border-gray-100"
+                className="w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 border-b border-gray-100 relative"
                 style={activeConv?.key === conv.key ? { backgroundColor: '#FFF0F5' } : {}}
               >
+              <button onClick={() => selectConversation(conv)} className="flex items-start gap-3 flex-1 min-w-0 text-left">
                 {/* Avatar */}
                 <div
                   className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-400 to-yellow-400 overflow-hidden flex items-center justify-center text-sm font-bold text-white flex-shrink-0 mt-0.5"
@@ -311,6 +347,16 @@ export default function MessagesUI({ currentUserId, isAdmin = false }: Props) {
                   </div>
                 )}
               </button>
+              {isAdmin && (
+                <button
+                  onClick={() => deleteConversation(conv)}
+                  className="flex-shrink-0 text-gray-300 hover:text-red-400 transition-colors text-sm mt-0.5"
+                  title="Söhbəti sil"
+                >
+                  🗑
+                </button>
+              )}
+              </div>
             ))}
           </div>
         )}

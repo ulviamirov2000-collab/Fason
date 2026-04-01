@@ -160,6 +160,21 @@ export default function Navbar() {
     if (link) router.push(link)
   }
 
+  async function deleteNotif(id: string, e: React.MouseEvent) {
+    e.stopPropagation()
+    const notif = notifs.find(x => x.id === id)
+    await supabase.from('notifications').delete().eq('id', id)
+    setNotifs(n => n.filter(x => x.id !== id))
+    if (notif && !notif.is_read) setNotifCount(c => Math.max(0, c - 1))
+  }
+
+  async function deleteAllNotifs() {
+    if (!user) return
+    await supabase.from('notifications').delete().eq('user_id', user.id)
+    setNotifs([])
+    setNotifCount(0)
+  }
+
   // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -255,11 +270,18 @@ export default function Navbar() {
                 >
                   <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white">
                     <span className="text-sm font-bold" style={{ color: '#1a1040' }}>Bildirişlər</span>
-                    {notifCount > 0 && (
-                      <button onClick={markAllNotifsRead} className="text-xs font-medium" style={{ color: '#FF2D78' }}>
-                        Hamısını oxu
-                      </button>
-                    )}
+                    <div className="flex items-center gap-3">
+                      {notifCount > 0 && (
+                        <button onClick={markAllNotifsRead} className="text-xs font-medium" style={{ color: '#FF2D78' }}>
+                          Hamısını oxu
+                        </button>
+                      )}
+                      {notifs.length > 0 && (
+                        <button onClick={deleteAllNotifs} className="text-xs font-medium text-gray-400 hover:text-red-400 transition-colors">
+                          Hamısını sil
+                        </button>
+                      )}
+                    </div>
                   </div>
                   {notifs.length === 0 ? (
                     <div className="px-4 py-6 text-center text-sm text-gray-400">Bildiriş yoxdur</div>
@@ -273,27 +295,38 @@ export default function Navbar() {
                         n.type === 'offer'           ? { icon: '💰', color: '#FF2D78', bg: '#FFF5F8' } :
                                                        { icon: '🔔', color: '#6b7280', bg: 'white'   }
                       return (
-                        <button
+                        <div
                           key={n.id}
-                          onClick={() => markNotifRead(n.id, n.link)}
-                          className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 flex gap-3 items-start"
+                          className="w-full text-left border-b border-gray-50 flex items-start"
                           style={{ backgroundColor: n.is_read ? 'white' : typeStyle.bg }}
                         >
-                          <div
-                            className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5"
-                            style={{ backgroundColor: typeStyle.bg, color: typeStyle.color, border: `1.5px solid ${typeStyle.color}` }}
+                          <button
+                            onClick={() => markNotifRead(n.id, n.link)}
+                            className="flex-1 flex gap-3 items-start px-4 py-3 hover:bg-black/5 transition-colors text-left"
                           >
-                            {typeStyle.icon}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold" style={{ color: typeStyle.color }}>{n.title}</p>
-                            {n.body && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.body}</p>}
-                            <p className="text-xs text-gray-300 mt-1">{new Date(n.created_at).toLocaleDateString('az-AZ')}</p>
-                          </div>
-                          {!n.is_read && (
-                            <div className="w-2 h-2 rounded-full mt-1 flex-shrink-0" style={{ backgroundColor: typeStyle.color }} />
-                          )}
-                        </button>
+                            <div
+                              className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5"
+                              style={{ backgroundColor: typeStyle.bg, color: typeStyle.color, border: `1.5px solid ${typeStyle.color}` }}
+                            >
+                              {typeStyle.icon}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold" style={{ color: typeStyle.color }}>{n.title}</p>
+                              {n.body && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.body}</p>}
+                              <p className="text-xs text-gray-300 mt-1">{new Date(n.created_at).toLocaleDateString('az-AZ')}</p>
+                            </div>
+                            {!n.is_read && (
+                              <div className="w-2 h-2 rounded-full mt-1 flex-shrink-0" style={{ backgroundColor: typeStyle.color }} />
+                            )}
+                          </button>
+                          <button
+                            onClick={(e) => deleteNotif(n.id, e)}
+                            className="px-2 py-3 text-gray-300 hover:text-red-400 transition-colors text-sm flex-shrink-0"
+                            title="Sil"
+                          >
+                            🗑
+                          </button>
+                        </div>
                       )
                     })
                   )}

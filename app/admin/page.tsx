@@ -64,7 +64,7 @@ type DashboardStats = {
 }
 
 type TrackingDeal = {
-  order_id:       string
+  offer_id:       string
   listing_id:     string
   listing_title:  string
   listing_image:  string | null
@@ -75,14 +75,10 @@ type TrackingDeal = {
   seller_id:      string
   seller_name:    string
   seller_avatar:  string | null
-  offer_id:       string | null
-  offered_price:  number | null
+  offered_price:  number
   counter_price:  number | null
-  offer_status:   string | null
-  order_status:   string
-  final_price:    number
+  status:         string
   created_at:     string
-  offer_at:       string | null
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -172,50 +168,44 @@ export default function AdminPage() {
 
   const loadTracking = useCallback(async () => {
     setLoading(true)
-    const { data: ordersData } = await supabase
-      .from('orders')
+    const { data } = await supabase
+      .from('offers')
       .select(`
-        id, listing_id, buyer_id, seller_id, status, final_price, created_at, offer_id,
-        listings:listing_id(id, title_az, images, price),
-        buyers:buyer_id(id, full_name, email, avatar_url),
-        sellers:seller_id(id, full_name, email, avatar_url)
+        id, listing_id, buyer_id, offered_price, counter_price, status, created_at,
+        listings:listing_id(id, title_az, images, price, seller_id),
+        buyers:buyer_id(id, full_name, email, avatar_url)
       `)
       .order('created_at', { ascending: false })
       .limit(200)
 
-    if (!ordersData) { setLoading(false); return }
+    if (!data) { setLoading(false); return }
 
-    const offerIds = (ordersData as any[]).map((o: any) => o.offer_id).filter(Boolean)
-    const offersMap = new Map<string, any>()
-
-    if (offerIds.length > 0) {
-      const { data: offersData } = await supabase
-        .from('offers').select('*').in('id', offerIds)
-      for (const offer of offersData ?? []) offersMap.set(offer.id, offer)
+    const sellerIds = [...new Set((data as any[]).map((o: any) => o.listings?.seller_id).filter(Boolean))]
+    const sellersMap = new Map<string, any>()
+    if (sellerIds.length > 0) {
+      const { data: sellersData } = await supabase
+        .from('users').select('id, full_name, email, avatar_url').in('id', sellerIds)
+      for (const s of sellersData ?? []) sellersMap.set(s.id, s)
     }
 
-    setTrackingDeals((ordersData as any[]).map((o: any) => {
-      const offer = o.offer_id ? offersMap.get(o.offer_id) : null
+    setTrackingDeals((data as any[]).map((o: any) => {
+      const seller = sellersMap.get(o.listings?.seller_id)
       return {
-        order_id:      o.id,
+        offer_id:      o.id,
         listing_id:    o.listing_id,
-        listing_title: o.listings?.title_az  ?? 'Elan',
+        listing_title: o.listings?.title_az    ?? 'Elan',
         listing_image: o.listings?.images?.[0] ?? null,
-        listing_price: o.listings?.price    ?? 0,
+        listing_price: o.listings?.price       ?? 0,
         buyer_id:      o.buyer_id,
         buyer_name:    o.buyers?.full_name  || o.buyers?.email?.split('@')[0]  || 'Alıcı',
         buyer_avatar:  o.buyers?.avatar_url ?? null,
-        seller_id:     o.seller_id,
-        seller_name:   o.sellers?.full_name || o.sellers?.email?.split('@')[0] || 'Satıcı',
-        seller_avatar: o.sellers?.avatar_url ?? null,
-        offer_id:      o.offer_id ?? null,
-        offered_price: offer?.offered_price ?? null,
-        counter_price: offer?.counter_price ?? null,
-        offer_status:  offer?.status        ?? null,
-        order_status:  o.status,
-        final_price:   o.final_price,
+        seller_id:     o.listings?.seller_id   ?? '',
+        seller_name:   seller?.full_name    || seller?.email?.split('@')[0]    || 'Satıcı',
+        seller_avatar: seller?.avatar_url   ?? null,
+        offered_price: o.offered_price,
+        counter_price: o.counter_price      ?? null,
+        status:        o.status,
         created_at:    o.created_at,
-        offer_at:      offer?.created_at    ?? null,
       }
     }))
     setLoading(false)
@@ -390,9 +380,16 @@ export default function AdminPage() {
     setUnseenCount(prev => Math.max(0, prev - 1))
   }
 
-  async function updateTrackingStatus(orderId: string, status: string) {
-    await supabase.from('orders').update({ status }).eq('id', orderId)
-    setTrackingDeals(prev => prev.map(d => d.order_id === orderId ? { ...d, order_status: status } : d))
+  async function deleteOffer(offerId: string) {
+    await supabase.from('offers').delete().eq('id', offerId)
+    setTrackingDeals(prev => prev.filter(d => d.offer_id !== offerId))
+  }
+
+  async function deleteAllOffers() {
+    if (!confirm('Bütün tracking məlumatlarını silmək istədiyinizə əminsiniz?')) return
+    const ids = trackingDeals.map(d => d.offer_id)
+    if (ids.length > 0) await supabase.from('offers').delete().in('id', ids)
+    setTrackingDeals([])
   }
 
   async function markOrdersSeen() {
@@ -428,22 +425,18 @@ export default function AdminPage() {
 
   // ── Timeline helper ───────────────────────────────────────────────────────────
   function DealTimeline({ deal }: { deal: TrackingDeal }) {
-    const steps: { icon: string; label: string; active: boolean; color: string }[] = []
-
-    if (deal.offer_id) {
-      steps.push({ icon: '💰', label: `${deal.offered_price} ₼ Təklif`, active: true, color: '#FF2D78' })
-    }
+    const steps: { icon: string; label: string; color: string }[] = [
+      { icon: '💰', label: `${deal.offered_price} ₼ Təklif`, color: '#FF2D78' },
+    ]
     if (deal.counter_price) {
-      steps.push({ icon: '↩', label: `${deal.counter_price} ₼ Əks-təklif`, active: true, color: '#f97316' })
+      steps.push({ icon: '↩', label: `${deal.counter_price} ₼ Əks-təklif`, color: '#f97316' })
     }
-    if (deal.offer_status === 'accepted') {
-      steps.push({ icon: '✓', label: 'Qəbul', active: true, color: '#10b981' })
-    }
-    steps.push({ icon: '🛒', label: 'Sifariş', active: true, color: '#3b82f6' })
-    if (deal.order_status === 'delivered') {
-      steps.push({ icon: '📦', label: 'Çatdırıldı', active: true, color: '#16a34a' })
-    } else {
-      steps.push({ icon: '📦', label: 'Çatdırıldı', active: false, color: '#d1d5db' })
+    if (deal.status === 'accepted') {
+      steps.push({ icon: '✓', label: 'Qəbul edildi', color: '#10b981' })
+    } else if (deal.status === 'rejected') {
+      steps.push({ icon: '✗', label: 'Rədd edildi', color: '#ef4444' })
+    } else if (deal.status === 'countered') {
+      steps.push({ icon: '↩', label: 'Cavab gözlənilir', color: '#f97316' })
     }
 
     return (
@@ -453,11 +446,7 @@ export default function AdminPage() {
             {i > 0 && <span className="text-gray-300 text-xs">→</span>}
             <span
               className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
-              style={
-                s.active
-                  ? { backgroundColor: s.color + '15', color: s.color, border: `1px solid ${s.color}40` }
-                  : { backgroundColor: '#f9fafb', color: '#9ca3af', border: '1px solid #e5e7eb' }
-              }
+              style={{ backgroundColor: s.color + '15', color: s.color, border: `1px solid ${s.color}40` }}
             >
               {s.icon} {s.label}
             </span>
@@ -601,29 +590,39 @@ export default function AdminPage() {
           {!loading && tab === 'tracking' && (
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-gray-400">{trackingDeals.length} deal</span>
-                <button
-                  onClick={loadTracking}
-                  className="text-xs px-3 py-1.5 rounded-full border text-gray-500 hover:bg-gray-100 transition-colors"
-                  style={{ border: '1px solid #e5e7eb' }}
-                >
-                  ↻ Yenilə
-                </button>
+                <span className="text-xs text-gray-400">{trackingDeals.length} təklif</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={loadTracking}
+                    className="text-xs px-3 py-1.5 rounded-full text-gray-500 hover:bg-gray-100 transition-colors"
+                    style={{ border: '1px solid #e5e7eb' }}
+                  >
+                    ↻ Yenilə
+                  </button>
+                  {trackingDeals.length > 0 && (
+                    <button
+                      onClick={deleteAllOffers}
+                      className="text-xs px-3 py-1.5 rounded-full font-semibold hover:bg-red-50 transition-colors"
+                      style={{ color: '#ef4444', border: '1px solid #fecaca' }}
+                    >
+                      🗑 Hamısını sil
+                    </button>
+                  )}
+                </div>
               </div>
 
               {trackingDeals.length === 0 && (
-                <div className="py-16 text-center text-gray-400 text-sm">Hələ deal yoxdur</div>
+                <div className="py-16 text-center text-gray-400 text-sm">Hələ təklif yoxdur</div>
               )}
 
               {trackingDeals.map(deal => (
                 <div
-                  key={deal.order_id}
+                  key={deal.offer_id}
                   className="rounded-2xl p-4 flex flex-col gap-3"
                   style={{ backgroundColor: 'white', border: '1.5px solid #e5e7eb' }}
                 >
-                  {/* Top row: listing + parties */}
+                  {/* Top row: listing + status + delete */}
                   <div className="flex items-start gap-4">
-                    {/* Listing thumb */}
                     <div className="w-12 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100">
                       {deal.listing_image ? (
                         <Image src={deal.listing_image} alt={deal.listing_title} width={48} height={56} className="object-cover w-full h-full" unoptimized />
@@ -632,7 +631,6 @@ export default function AdminPage() {
                       )}
                     </div>
 
-                    {/* Listing info */}
                     <div className="flex-1 min-w-0">
                       <a
                         href={`/listing/${deal.listing_id}`}
@@ -644,69 +642,58 @@ export default function AdminPage() {
                         {deal.listing_title}
                       </a>
                       <div className="flex items-center gap-2 mt-1">
-                        {deal.offer_id && deal.offered_price !== deal.final_price && (
-                          <span className="text-xs line-through text-gray-400">{deal.listing_price} ₼</span>
-                        )}
-                        <span className="text-sm font-bold" style={{ color: '#FF2D78' }}>{deal.final_price} ₼</span>
+                        <span className="text-xs line-through text-gray-400">{deal.listing_price} ₼</span>
+                        <span className="text-sm font-bold" style={{ color: '#FF2D78' }}>{deal.offered_price} ₼</span>
                       </div>
                     </div>
 
-                    {/* Status badge */}
-                    <span
-                      className="text-[11px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0"
-                      style={
-                        deal.order_status === 'pending'   ? { backgroundColor: '#fffbeb', color: '#d97706' } :
-                        deal.order_status === 'confirmed' ? { backgroundColor: '#eff6ff', color: '#3b82f6' } :
-                        deal.order_status === 'delivered' ? { backgroundColor: '#f0fdf4', color: '#16a34a' } :
-                                                            { backgroundColor: '#fef2f2', color: '#ef4444' }
-                      }
-                    >
-                      {deal.order_status === 'pending'   ? 'Gözlənilir' :
-                       deal.order_status === 'confirmed' ? 'Təsdiqləndi' :
-                       deal.order_status === 'delivered' ? 'Çatdırıldı'  : 'Ləğv edildi'}
-                    </span>
+                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                      <span
+                        className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                        style={
+                          deal.status === 'pending'   ? { backgroundColor: '#fffbeb', color: '#d97706' } :
+                          deal.status === 'accepted'  ? { backgroundColor: '#f0fdf4', color: '#16a34a' } :
+                          deal.status === 'rejected'  ? { backgroundColor: '#fef2f2', color: '#ef4444' } :
+                                                        { backgroundColor: '#fff7ed', color: '#f97316' }
+                        }
+                      >
+                        {deal.status === 'pending'   ? 'Gözlənilir' :
+                         deal.status === 'accepted'  ? 'Qəbul edildi' :
+                         deal.status === 'rejected'  ? 'Rədd edildi' : 'Əks-təklif'}
+                      </span>
+                      <button
+                        onClick={() => deleteOffer(deal.offer_id)}
+                        className="text-[11px] font-semibold px-2 py-0.5 rounded-lg hover:bg-red-50 transition-colors"
+                        style={{ color: '#ef4444', border: '1px solid #fecaca' }}
+                      >
+                        🗑 Sil
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Parties row */}
+                  {/* Parties */}
                   <div className="flex items-center gap-3 text-xs">
-                    {/* Buyer */}
                     <button
-                      onClick={() => openUserDetail({
-                        id: deal.buyer_id, email: null, full_name: deal.buyer_name,
-                        avatar_url: deal.buyer_avatar, is_seller: false, is_banned: false,
-                        created_at: deal.created_at, listing_count: 0, message_count: 0
-                      })}
+                      onClick={() => openUserDetail({ id: deal.buyer_id, email: null, full_name: deal.buyer_name, avatar_url: deal.buyer_avatar, is_seller: false, is_banned: false, created_at: deal.created_at, listing_count: 0, message_count: 0 })}
                       className="flex items-center gap-1.5 hover:underline"
                       style={{ color: '#1a1040' }}
                     >
                       <div className="w-6 h-6 rounded-full bg-gradient-to-br from-pink-400 to-yellow-400 overflow-hidden flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0">
-                        {deal.buyer_avatar ? (
-                          <Image src={deal.buyer_avatar} alt={deal.buyer_name} width={24} height={24} className="object-cover w-full h-full" unoptimized />
-                        ) : deal.buyer_name[0].toUpperCase()}
+                        {deal.buyer_avatar ? <Image src={deal.buyer_avatar} alt={deal.buyer_name} width={24} height={24} className="object-cover w-full h-full" unoptimized /> : deal.buyer_name[0].toUpperCase()}
                       </div>
                       <span className="font-semibold">👤 {deal.buyer_name}</span>
                     </button>
-
                     <span className="text-gray-300">→</span>
-
-                    {/* Seller */}
                     <button
-                      onClick={() => openUserDetail({
-                        id: deal.seller_id, email: null, full_name: deal.seller_name,
-                        avatar_url: deal.seller_avatar, is_seller: true, is_banned: false,
-                        created_at: deal.created_at, listing_count: 0, message_count: 0
-                      })}
+                      onClick={() => openUserDetail({ id: deal.seller_id, email: null, full_name: deal.seller_name, avatar_url: deal.seller_avatar, is_seller: true, is_banned: false, created_at: deal.created_at, listing_count: 0, message_count: 0 })}
                       className="flex items-center gap-1.5 hover:underline"
                       style={{ color: '#1a1040' }}
                     >
                       <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-400 to-teal-400 overflow-hidden flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0">
-                        {deal.seller_avatar ? (
-                          <Image src={deal.seller_avatar} alt={deal.seller_name} width={24} height={24} className="object-cover w-full h-full" unoptimized />
-                        ) : deal.seller_name[0].toUpperCase()}
+                        {deal.seller_avatar ? <Image src={deal.seller_avatar} alt={deal.seller_name} width={24} height={24} className="object-cover w-full h-full" unoptimized /> : deal.seller_name[0].toUpperCase()}
                       </div>
                       <span className="font-semibold">🏷 {deal.seller_name}</span>
                     </button>
-
                     <span className="text-gray-300 text-[10px] ml-auto">{fmt(deal.created_at)}</span>
                   </div>
 
@@ -716,59 +703,33 @@ export default function AdminPage() {
                   {/* Action buttons */}
                   <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-gray-100">
                     <button
-                      onClick={() => setChatTarget({ userId: deal.buyer_id, listingId: deal.listing_id, userName: deal.buyer_name, listingTitle: deal.listing_title, listingPrice: deal.final_price, listingImage: deal.listing_image ?? undefined })}
+                      onClick={() => setChatTarget({ userId: deal.buyer_id, listingId: deal.listing_id, userName: deal.buyer_name, listingTitle: deal.listing_title, listingPrice: deal.offered_price, listingImage: deal.listing_image ?? undefined })}
                       className="text-[11px] font-semibold px-2.5 py-1 rounded-lg hover:bg-pink-50 transition-colors"
                       style={{ color: '#FF2D78', border: '1px solid #fecdd3' }}
                     >
                       💬 Alıcıya yaz
                     </button>
                     <button
-                      onClick={() => setChatTarget({ userId: deal.seller_id, listingId: deal.listing_id, userName: deal.seller_name, listingTitle: deal.listing_title, listingPrice: deal.final_price, listingImage: deal.listing_image ?? undefined })}
+                      onClick={() => setChatTarget({ userId: deal.seller_id, listingId: deal.listing_id, userName: deal.seller_name, listingTitle: deal.listing_title, listingPrice: deal.offered_price, listingImage: deal.listing_image ?? undefined })}
                       className="text-[11px] font-semibold px-2.5 py-1 rounded-lg hover:bg-yellow-50 transition-colors"
                       style={{ color: '#d97706', border: '1px solid #fde68a' }}
                     >
                       💬 Satıcıya yaz
                     </button>
                     <button
-                      onClick={() => openUserDetail({
-                        id: deal.buyer_id, email: null, full_name: deal.buyer_name,
-                        avatar_url: deal.buyer_avatar, is_seller: false, is_banned: false,
-                        created_at: deal.created_at, listing_count: 0, message_count: 0
-                      })}
+                      onClick={() => openUserDetail({ id: deal.buyer_id, email: null, full_name: deal.buyer_name, avatar_url: deal.buyer_avatar, is_seller: false, is_banned: false, created_at: deal.created_at, listing_count: 0, message_count: 0 })}
                       className="text-[11px] font-semibold px-2.5 py-1 rounded-lg hover:bg-gray-100 transition-colors"
                       style={{ color: '#6b7280', border: '1px solid #e5e7eb' }}
                     >
                       👤 Alıcı profili
                     </button>
                     <button
-                      onClick={() => openUserDetail({
-                        id: deal.seller_id, email: null, full_name: deal.seller_name,
-                        avatar_url: deal.seller_avatar, is_seller: true, is_banned: false,
-                        created_at: deal.created_at, listing_count: 0, message_count: 0
-                      })}
+                      onClick={() => openUserDetail({ id: deal.seller_id, email: null, full_name: deal.seller_name, avatar_url: deal.seller_avatar, is_seller: true, is_banned: false, created_at: deal.created_at, listing_count: 0, message_count: 0 })}
                       className="text-[11px] font-semibold px-2.5 py-1 rounded-lg hover:bg-gray-100 transition-colors"
                       style={{ color: '#6b7280', border: '1px solid #e5e7eb' }}
                     >
                       👤 Satıcı profili
                     </button>
-                    {deal.order_status === 'pending' && (
-                      <button
-                        onClick={() => updateTrackingStatus(deal.order_id, 'confirmed')}
-                        className="text-[11px] font-semibold px-2.5 py-1 rounded-lg hover:bg-blue-50 transition-colors ml-auto"
-                        style={{ color: '#3b82f6', border: '1px solid #bfdbfe' }}
-                      >
-                        ✓ Təsdiqlə
-                      </button>
-                    )}
-                    {(deal.order_status === 'pending' || deal.order_status === 'confirmed') && (
-                      <button
-                        onClick={() => updateTrackingStatus(deal.order_id, 'delivered')}
-                        className="text-[11px] font-semibold px-2.5 py-1 rounded-lg hover:bg-green-50 transition-colors"
-                        style={{ color: '#16a34a', border: '1px solid #bbf7d0' }}
-                      >
-                        📦 Çatdırıldı
-                      </button>
-                    )}
                   </div>
                 </div>
               ))}
