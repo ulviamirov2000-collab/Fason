@@ -146,7 +146,7 @@ export default function OrderPage({ params }: { params: Promise<{ listing_id: st
       </Link>
 
       <h1 className="text-xl font-bold mb-6" style={{ fontFamily: 'var(--font-unbounded)', color: '#1a1040' }}>
-        🛍 Sifariş ver
+        ✦ Sifariş ver
       </h1>
 
       {/* Listing summary */}

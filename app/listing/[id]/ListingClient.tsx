@@ -293,7 +293,7 @@ export default function ListingClient({ id }: { id: string }) {
                   className="w-full py-3.5 rounded-2xl font-bold text-white text-center transition-transform hover:scale-[1.02] active:scale-[0.98]"
                   style={{ backgroundColor: '#10b981', border: '2px solid #1a1040', boxShadow: '3px 3px 0 #1a1040', display: 'block' }}
                 >
-                  🛍 Al · {listing.price} ₼
+                  ✦ Al · {listing.price} ₼
                 </Link>
               )}
 
