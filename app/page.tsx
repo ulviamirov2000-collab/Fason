@@ -153,23 +153,23 @@ export default function HomePage() {
     <main>
       {/* ── Hero ── */}
       <section
-        className="w-full flex flex-col items-center justify-center py-16 px-4 relative overflow-hidden"
-        style={{ backgroundColor: '#1a1040', minHeight: '340px' }}
+        className="w-full flex flex-col items-center justify-center py-8 px-4 relative overflow-hidden"
+        style={{ backgroundColor: '#1a1040', minHeight: '220px' }}
       >
         <div
-          className="absolute top-0 right-0 w-64 h-64 rounded-full opacity-20 blur-3xl"
+          className="absolute top-0 right-0 w-48 h-48 rounded-full opacity-20 blur-3xl"
           style={{ backgroundColor: '#FF2D78', transform: 'translate(30%, -30%)' }}
         />
         <div
-          className="absolute bottom-0 left-0 w-48 h-48 rounded-full opacity-20 blur-3xl"
+          className="absolute bottom-0 left-0 w-36 h-36 rounded-full opacity-20 blur-3xl"
           style={{ backgroundColor: '#00E5CC', transform: 'translate(-30%, 30%)' }}
         />
-        <div className="relative z-10 flex flex-col items-center gap-4">
+        <div className="relative z-10 flex flex-col items-center gap-3">
           <Image
             src="/fason-logo (2).png"
             alt="FASON"
-            width={400}
-            height={200}
+            width={300}
+            height={150}
             className="object-contain"
             priority
           />
@@ -179,7 +179,7 @@ export default function HomePage() {
           >
             DOLABINI PULA ÇEVİR
           </p>
-          <div className="flex gap-6 mt-2">
+          <div className="flex gap-6 mt-1">
             {[
               { num: '2.4K+', label_az: 'Elan' },
               { num: '800+', label_az: 'Satıcı' },
