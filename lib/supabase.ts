@@ -22,6 +22,7 @@ export type Database = {
           phone: string | null
           full_name: string | null
           avatar_url: string | null
+          banner_url: string | null
           address: string | null
           is_seller: boolean
           is_banned: boolean

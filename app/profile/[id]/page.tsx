@@ -37,6 +37,10 @@ export default function ProfilePage() {
   const [avatarUploading, setAvatarUploading] = useState(false)
   const avatarInputRef = useRef<HTMLInputElement>(null)
 
+  // Banner upload
+  const [bannerUploading, setBannerUploading] = useState(false)
+  const bannerInputRef = useRef<HTMLInputElement>(null)
+
   function showToast(msg: string) {
     if (toastTimer.current) clearTimeout(toastTimer.current)
     setToast(msg)
@@ -65,6 +69,7 @@ export default function ProfilePage() {
           phone: null,
           full_name: authUser.user_metadata?.full_name ?? null,
           avatar_url: null,
+          banner_url: null,
           address: null,
           is_seller: false,
           is_banned: false,
@@ -142,6 +147,26 @@ export default function ProfilePage() {
     setProfileUser((prev) => prev ? { ...prev, avatar_url: urlWithBust } : prev)
     setAvatarUploading(false)
     showToast('Foto yeniləndi ✓')
+  }
+
+  async function uploadBanner(file: File) {
+    if (!currentUserId) return
+    setBannerUploading(true)
+    const path = `${currentUserId}/banner.jpg`
+    const { data, error } = await supabase.storage
+      .from('banners')
+      .upload(path, file, { contentType: file.type, upsert: true })
+    if (error || !data) {
+      showToast(`Xəta: ${error?.message ?? 'Yüklənmədi'}`)
+      setBannerUploading(false)
+      return
+    }
+    const { data: { publicUrl } } = supabase.storage.from('banners').getPublicUrl(path)
+    const urlWithBust = `${publicUrl}?t=${Date.now()}`
+    await supabase.from('users').update({ banner_url: urlWithBust }).eq('id', currentUserId)
+    setProfileUser(prev => prev ? { ...prev, banner_url: urlWithBust } : prev)
+    setBannerUploading(false)
+    showToast('Banner yeniləndi ✓')
   }
 
   async function setListingStatus(listingId: string, status: 'archived' | 'sold') {
@@ -230,137 +255,132 @@ export default function ProfilePage() {
         </div>
       )}
 
+      {/* Hidden file inputs */}
+      {isOwner && (
+        <>
+          <input ref={avatarInputRef} type="file" accept="image/*" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) uploadAvatar(f); e.target.value = '' }} />
+          <input ref={bannerInputRef} type="file" accept="image/*" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) uploadBanner(f); e.target.value = '' }} />
+        </>
+      )}
+
       {/* Profile header */}
-      <div
-        className="rounded-3xl p-6 mb-8 flex flex-col sm:flex-row items-center sm:items-start gap-5"
-        style={{ backgroundColor: '#1a1040', border: '2px solid #1a1040' }}
-      >
-        {/* Avatar */}
-        <div className="relative flex-shrink-0">
-          {/* Hidden file input */}
+      <div className="rounded-3xl overflow-hidden mb-8" style={{ border: '2px solid #1a1040' }}>
+
+        {/* Banner */}
+        <div className="relative w-full" style={{ height: '160px', backgroundColor: '#1a1040' }}>
+          {profileUser.banner_url && (
+            <Image src={profileUser.banner_url} alt="banner" fill className="object-cover" unoptimized />
+          )}
+          {!profileUser.banner_url && (
+            <div className="w-full h-full bg-gradient-to-br from-[#1a1040] via-[#2d1560] to-[#1a1040]" />
+          )}
+          {/* Banner upload button — owner only */}
           {isOwner && (
-            <input
-              ref={avatarInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (file) uploadAvatar(file)
-                e.target.value = ''
-              }}
-            />
-          )}
-
-          {/* Avatar circle */}
-          <div
-            className="w-20 h-20 rounded-full overflow-hidden bg-gradient-to-br from-pink-400 to-yellow-400 flex items-center justify-center text-3xl font-bold text-white"
-            style={{ border: '3px solid #FFE600' }}
-          >
-            {profileUser.avatar_url ? (
-              <Image
-                src={profileUser.avatar_url}
-                alt={displayName}
-                width={80}
-                height={80}
-                className="object-cover w-full h-full"
-                unoptimized
-              />
-            ) : (
-              <span>{displayName[0].toUpperCase()}</span>
-            )}
-          </div>
-
-          {/* Uploading spinner overlay */}
-          {avatarUploading && (
-            <div className="absolute inset-0 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(26,16,64,0.65)' }}>
-              <div className="w-6 h-6 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-            </div>
-          )}
-
-          {/* Camera button overlay — owner only, hidden while uploading */}
-          {isOwner && !avatarUploading && (
             <button
-              onClick={() => avatarInputRef.current?.click()}
-              className="absolute bottom-0 right-0 w-7 h-7 rounded-full flex items-center justify-center transition-transform hover:scale-110 active:scale-95"
-              style={{ backgroundColor: '#FF2D78', border: '2px solid #1a1040' }}
-              aria-label="Foto dəyiş"
+              onClick={() => bannerInputRef.current?.click()}
+              disabled={bannerUploading}
+              className="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all hover:opacity-90"
+              style={{ backgroundColor: 'rgba(0,0,0,0.55)', color: 'white', border: '1.5px solid rgba(255,255,255,0.2)', backdropFilter: 'blur(6px)' }}
             >
-              <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
+              {bannerUploading ? (
+                <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+              ) : (
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              )}
+              Banner
             </button>
           )}
         </div>
 
-        {/* Info */}
-        <div className="flex-1 text-center sm:text-left min-w-0">
-          {editMode ? (
-            <div className="flex items-center gap-2 flex-wrap">
-              <input
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                className="flex-1 min-w-0 px-3 py-1.5 rounded-xl text-sm text-white outline-none bg-transparent"
-                style={{ border: '2px solid #FFE600' }}
-              />
-              <button
-                onClick={saveProfile}
-                disabled={saving}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold disabled:opacity-50 flex-shrink-0"
-                style={{ backgroundColor: '#FFE600', color: '#1a1040' }}
-              >
-                {saving ? '...' : 'Saxla'}
-              </button>
-              <button
-                onClick={() => setEditMode(false)}
-                className="px-3 py-1.5 rounded-xl text-xs text-white/60 border border-white/20 flex-shrink-0"
-              >
-                Ləğv et
-              </button>
-            </div>
-          ) : (
-            <h1
-              className="text-2xl font-bold text-white"
-              style={{ fontFamily: 'var(--font-unbounded)' }}
-            >
-              {displayName}
-            </h1>
-          )}
-          {profileUser.email && (
-            <p className="text-white/40 text-xs mt-1 truncate">{profileUser.email}</p>
-          )}
-          {profileUser.is_seller && (
-            <span
-              className="inline-block mt-1 text-xs font-bold px-3 py-1 rounded-full"
-              style={{ backgroundColor: '#FFE600', color: '#1a1040' }}
-            >
-              ✓ Satıcı
-            </span>
-          )}
-          <p className="text-white/50 text-xs mt-2">{joinYear}-dən FASON üzvü</p>
-        </div>
+        {/* Avatar + info row */}
+        <div className="px-5 pb-5" style={{ backgroundColor: '#1a1040' }}>
+          <div className="flex flex-col sm:flex-row items-center sm:items-end gap-4 -mt-10">
 
-        {/* Stats + edit */}
-        <div className="flex items-center gap-4">
-          <div className="text-center">
-            <div
-              className="text-2xl font-bold"
-              style={{ color: '#FFE600', fontFamily: 'var(--font-unbounded)' }}
-            >
-              {activeCount}
+            {/* Avatar */}
+            <div className="relative flex-shrink-0">
+              <div
+                className="w-20 h-20 rounded-full overflow-hidden bg-gradient-to-br from-pink-400 to-yellow-400 flex items-center justify-center text-3xl font-bold text-white"
+                style={{ border: '3px solid #1a1040', outline: '3px solid #FFE600' }}
+              >
+                {profileUser.avatar_url ? (
+                  <Image src={profileUser.avatar_url} alt={displayName} width={80} height={80} className="object-cover w-full h-full" unoptimized />
+                ) : (
+                  <span>{displayName[0].toUpperCase()}</span>
+                )}
+              </div>
+              {avatarUploading && (
+                <div className="absolute inset-0 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(26,16,64,0.65)' }}>
+                  <div className="w-6 h-6 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                </div>
+              )}
+              {isOwner && !avatarUploading && (
+                <button
+                  onClick={() => avatarInputRef.current?.click()}
+                  className="absolute bottom-0 right-0 w-7 h-7 rounded-full flex items-center justify-center transition-transform hover:scale-110 active:scale-95"
+                  style={{ backgroundColor: '#FF2D78', border: '2px solid #1a1040' }}
+                >
+                  <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </button>
+              )}
             </div>
-            <div className="text-white/50 text-xs">Aktiv elan</div>
+
+            {/* Info */}
+            <div className="flex-1 text-center sm:text-left min-w-0 pb-1">
+              {editMode ? (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input
+                    value={editName}
+                    onChange={e => setEditName(e.target.value)}
+                    className="flex-1 min-w-0 px-3 py-1.5 rounded-xl text-sm text-white outline-none bg-transparent"
+                    style={{ border: '2px solid #FFE600' }}
+                  />
+                  <button onClick={saveProfile} disabled={saving}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold disabled:opacity-50 flex-shrink-0"
+                    style={{ backgroundColor: '#FFE600', color: '#1a1040' }}>
+                    {saving ? '...' : 'Saxla'}
+                  </button>
+                  <button onClick={() => setEditMode(false)}
+                    className="px-3 py-1.5 rounded-xl text-xs text-white/60 border border-white/20 flex-shrink-0">
+                    Ləğv et
+                  </button>
+                </div>
+              ) : (
+                <h1 className="text-2xl font-bold text-white" style={{ fontFamily: 'var(--font-unbounded)' }}>
+                  {displayName}
+                </h1>
+              )}
+              {profileUser.email && <p className="text-white/40 text-xs mt-1 truncate">{profileUser.email}</p>}
+              {profileUser.is_seller && (
+                <span className="inline-block mt-1 text-xs font-bold px-3 py-1 rounded-full" style={{ backgroundColor: '#FFE600', color: '#1a1040' }}>
+                  ✓ Satıcı
+                </span>
+              )}
+              <p className="text-white/50 text-xs mt-2">{joinYear}-dən FASON üzvü</p>
+            </div>
+
+            {/* Stats + edit */}
+            <div className="flex items-center gap-4 pb-1">
+              <div className="text-center">
+                <div className="text-2xl font-bold" style={{ color: '#FFE600', fontFamily: 'var(--font-unbounded)' }}>{activeCount}</div>
+                <div className="text-white/50 text-xs">Aktiv elan</div>
+              </div>
+              {isOwner && !editMode && (
+                <button onClick={() => setEditMode(true)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold transition-all hover:opacity-80"
+                  style={{ border: '2px solid #FFE600', color: '#FFE600' }}>
+                  ✏️ Redaktə
+                </button>
+              )}
+            </div>
           </div>
-          {isOwner && !editMode && (
-            <button
-              onClick={() => setEditMode(true)}
-              className="px-4 py-2 rounded-xl text-xs font-semibold transition-all hover:opacity-80"
-              style={{ border: '2px solid #FFE600', color: '#FFE600' }}
-            >
-              ✏️ Redaktə
-            </button>
-          )}
         </div>
       </div>
 
