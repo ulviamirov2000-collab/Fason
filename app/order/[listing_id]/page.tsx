@@ -1,26 +1,23 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import type { ListingRow, OfferRow } from '@/lib/supabase'
+import type { ListingRow } from '@/lib/supabase'
 
 type FullListing = ListingRow & {
   users: { id: string; full_name: string | null; email: string | null } | null
 }
 
 export default function OrderPage({ params }: { params: Promise<{ listing_id: string }> }) {
-  const router       = useRouter()
-  const searchParams = useSearchParams()
-  const offerId      = searchParams.get('offer')
+  const router = useRouter()
 
   const [listingId, setListingId] = useState<string | null>(null)
   useEffect(() => { params.then(p => setListingId(p.listing_id)) }, [params])
 
   const [listing,       setListing]       = useState<FullListing | null>(null)
-  const [offer,         setOffer]         = useState<OfferRow | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [loading,       setLoading]       = useState(true)
   const [submitting,    setSubmitting]    = useState(false)
@@ -28,10 +25,10 @@ export default function OrderPage({ params }: { params: Promise<{ listing_id: st
   const [orderId,       setOrderId]       = useState<string | null>(null)
 
   const [form, setForm] = useState({
-    delivery:  false,
-    address:   '',
-    phone:     '+994',
-    note:      '',
+    delivery: false,
+    address:  '',
+    phone:    '+994',
+    note:     '',
   })
 
   useEffect(() => {
@@ -45,22 +42,12 @@ export default function OrderPage({ params }: { params: Promise<{ listing_id: st
     supabase
       .from('listings')
       .select('*, users:seller_id(id, full_name, email)')
-      .eq('id', listingId)
-      .single()
+      .eq('id', listingId).single()
       .then(({ data }) => {
         setListing(data as FullListing)
         setLoading(false)
       })
-
-    if (offerId) {
-      supabase
-        .from('offers')
-        .select('*')
-        .eq('id', offerId)
-        .single()
-        .then(({ data }) => setOffer(data as OfferRow))
-    }
-  }, [listingId, offerId, router])
+  }, [listingId, router])
 
   async function submitOrder() {
     if (!currentUserId || !listing?.users) return
@@ -69,17 +56,13 @@ export default function OrderPage({ params }: { params: Promise<{ listing_id: st
 
     setSubmitting(true)
 
-    const finalPrice = offer
-      ? (offer.status === 'accepted' ? offer.offered_price : offer.counter_price ?? listing.price)
-      : listing.price
-
     const { data: orderData } = await supabase.from('orders').insert({
       listing_id:       listing.id,
       buyer_id:         currentUserId,
       seller_id:        listing.users.id,
-      offer_id:         offer?.id ?? null,
+      offer_id:         null,
       status:           'pending',
-      final_price:      finalPrice,
+      final_price:      listing.price,
       delivery_needed:  form.delivery,
       delivery_address: form.delivery ? form.address.trim() : null,
       phone:            form.phone.trim(),
@@ -110,9 +93,6 @@ export default function OrderPage({ params }: { params: Promise<{ listing_id: st
   }
 
   const sellerName = listing.users?.full_name || listing.users?.email?.split('@')[0] || 'Satıcı'
-  const finalPrice = offer
-    ? (offer.status === 'accepted' ? offer.offered_price : offer.counter_price ?? listing.price)
-    : listing.price
 
   if (done) {
     return (
@@ -129,10 +109,8 @@ export default function OrderPage({ params }: { params: Promise<{ listing_id: st
           style={{ backgroundColor: '#FAF7F2', border: '2px solid #1a1040' }}
         >
           <p className="text-sm font-semibold" style={{ color: '#1a1040' }}>{listing.title_az}</p>
-          <p className="text-lg font-bold" style={{ color: '#FF2D78' }}>{finalPrice} ₼</p>
-          {form.delivery && (
-            <p className="text-xs text-gray-500">📦 Kuryer: {form.address}</p>
-          )}
+          <p className="text-lg font-bold" style={{ color: '#FF2D78' }}>{listing.price} ₼</p>
+          {form.delivery && <p className="text-xs text-gray-500">📦 Kuryer: {form.address}</p>}
         </div>
         <button
           onClick={async () => {
@@ -140,11 +118,11 @@ export default function OrderPage({ params }: { params: Promise<{ listing_id: st
               .from('users').select('id').eq('email', 'ulvi.amirov.2000@gmail.com').single()
             if (adminData && currentUserId) {
               await supabase.from('messages').insert({
-                listing_id: listing.id,
-                sender_id:  currentUserId,
+                listing_id:  listing.id,
+                sender_id:   currentUserId,
                 receiver_id: adminData.id,
-                text: `Salam, ${listing.title_az} üçün sifariş verdim. Sifariş №: ${orderId ?? '—'}`,
-                is_read: false,
+                text:        `Salam, ${listing.title_az} üçün sifariş verdim. Sifariş №: ${orderId ?? '—'}`,
+                is_read:     false,
               })
             }
             router.push('/messages')
@@ -154,11 +132,7 @@ export default function OrderPage({ params }: { params: Promise<{ listing_id: st
         >
           💬 Adminlə əlaqə saxla
         </button>
-        <Link
-          href="/"
-          className="text-sm underline"
-          style={{ color: '#9ca3af' }}
-        >
+        <Link href="/" className="text-sm underline" style={{ color: '#9ca3af' }}>
           Ana səhifəyə qayıt
         </Link>
       </main>
@@ -176,10 +150,7 @@ export default function OrderPage({ params }: { params: Promise<{ listing_id: st
       </h1>
 
       {/* Listing summary */}
-      <div
-        className="flex gap-4 p-4 rounded-2xl mb-6"
-        style={{ backgroundColor: 'white', border: '2px solid #1a1040' }}
-      >
+      <div className="flex gap-4 p-4 rounded-2xl mb-6" style={{ backgroundColor: 'white', border: '2px solid #1a1040' }}>
         <div className="relative w-16 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100" style={{ border: '1.5px solid #e5e7eb' }}>
           {listing.images[0] ? (
             <Image src={listing.images[0]} alt={listing.title_az} fill className="object-cover" unoptimized />
@@ -191,30 +162,19 @@ export default function OrderPage({ params }: { params: Promise<{ listing_id: st
           <p className="font-semibold text-sm truncate" style={{ color: '#1a1040' }}>{listing.title_az}</p>
           <p className="text-xs text-gray-500">Satıcı: {sellerName}</p>
           <div className="flex items-center gap-2 mt-1">
-            {offer && (
-              <span className="text-xs line-through text-gray-400">{listing.price} ₼</span>
-            )}
             <span
               className="px-3 py-0.5 rounded-full text-sm font-bold text-black"
               style={{ backgroundColor: '#FFE600', border: '1.5px solid #1a1040' }}
             >
-              {finalPrice} ₼
+              {listing.price} ₼
             </span>
-            {offer && (
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: '#d1fae5', color: '#10b981' }}>
-                ✓ Razılaşılmış qiymət
-              </span>
-            )}
           </div>
         </div>
       </div>
 
       <div className="flex flex-col gap-5">
         {/* Delivery toggle */}
-        <div
-          className="flex items-center justify-between p-4 rounded-2xl"
-          style={{ backgroundColor: 'white', border: '2px solid #1a1040' }}
-        >
+        <div className="flex items-center justify-between p-4 rounded-2xl" style={{ backgroundColor: 'white', border: '2px solid #1a1040' }}>
           <div>
             <p className="font-semibold text-sm" style={{ color: '#1a1040' }}>📦 Kuryer lazımdır?</p>
             <p className="text-xs text-gray-400 mt-0.5">Çatdırılma xidməti</p>
@@ -277,18 +237,13 @@ export default function OrderPage({ params }: { params: Promise<{ listing_id: st
           />
         </div>
 
-        {/* Submit */}
         <button
           onClick={submitOrder}
-          disabled={
-            submitting ||
-            (form.delivery && !form.address.trim()) ||
-            !form.phone.trim() || form.phone === '+994'
-          }
+          disabled={submitting || (form.delivery && !form.address.trim()) || !form.phone.trim() || form.phone === '+994'}
           className="w-full py-4 rounded-2xl font-bold text-white text-base transition-transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ backgroundColor: '#FF2D78', border: '2px solid #1a1040', boxShadow: '3px 3px 0 #1a1040' }}
         >
-          {submitting ? 'Göndərilir...' : `✓ Sifarişi təsdiqlə · ${finalPrice} ₼`}
+          {submitting ? 'Göndərilir...' : `✓ Sifarişi təsdiqlə · ${listing.price} ₼`}
         </button>
       </div>
     </main>
