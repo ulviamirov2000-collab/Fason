@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Space_Grotesk, Unbounded } from 'next/font/google'
 import './globals.css'
 import Navbar from '@/components/Navbar'
+import OnboardingGate from '@/components/OnboardingGate'
 import { Analytics } from '@vercel/analytics/react'
 
 const spaceGrotesk = Space_Grotesk({
@@ -50,6 +51,7 @@ export default function RootLayout({
         style={{ backgroundColor: '#FAF7F2', fontFamily: 'var(--font-space-grotesk), sans-serif' }}
       >
         <Navbar />
+        <OnboardingGate />
         {children}
         <Analytics />
       </body>
