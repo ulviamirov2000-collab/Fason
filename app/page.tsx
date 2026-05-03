@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import FilterBar from '@/components/FilterBar'
 import CategoryNav from '@/components/CategoryNav'
@@ -30,7 +30,7 @@ function toCard(
   }
 }
 
-export default function HomePage() {
+function HomePageContent() {
   const searchParams = useSearchParams()
   const [listings, setListings] = useState<MockListing[]>([])
   const [loading, setLoading] = useState(true)
@@ -364,5 +364,13 @@ export default function HomePage() {
 
       <Footer />
     </main>
+  )
+}
+
+export default function HomePage() {
+  return (
+    <Suspense>
+      <HomePageContent />
+    </Suspense>
   )
 }
