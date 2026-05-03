@@ -1,9 +1,8 @@
 'use client'
 
-import Image from 'next/image'
 import { useEffect, useState, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import FilterBar from '@/components/FilterBar'
-import SearchBar from '@/components/SearchBar'
 import CategoryNav from '@/components/CategoryNav'
 import ListingCard, { MockListing } from '@/components/ListingCard'
 import Footer from '@/components/Footer'
@@ -12,12 +11,10 @@ import type { ListingRow } from '@/lib/supabase'
 import { SIZES_BY_SUBCATEGORY, FILTER_SIZES_BY_CATEGORY, DEFAULT_SIZES } from '@/lib/sizes'
 
 const CONDITION_VALUES = ['', 'new', 'good', 'fair'] as const
-const ROTATIONS: (-1 | 0 | 1)[] = [-1, 1, -1, 0, 1, -1, 0, 1]
 
 function toCard(
   l: ListingRow,
   seller: { name: string; avatar_url?: string | null },
-  index: number
 ): MockListing {
   return {
     id: l.id,
@@ -28,13 +25,13 @@ function toCard(
     condition: l.condition,
     images: l.images,
     seller,
-    rotation: ROTATIONS[index % ROTATIONS.length],
     views: l.views,
     basket_count: l.basket_count,
   }
 }
 
 export default function HomePage() {
+  const searchParams = useSearchParams()
   const [listings, setListings] = useState<MockListing[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -49,6 +46,12 @@ export default function HomePage() {
   const [filterColors,      setFilterColors]       = useState<string[]>([])
   const [filterCondition,   setFilterCondition]   = useState(0)
   const [filterSort,        setFilterSort]         = useState('newest')
+  const [filterSearch,      setFilterSearch]       = useState(searchParams.get('q') ?? '')
+
+  // Sync filterSearch when URL ?q param changes
+  useEffect(() => {
+    setFilterSearch(searchParams.get('q') ?? '')
+  }, [searchParams])
 
   // ── Fetch listings whenever any filter changes ─────────────────────────────
   const fetchListings = useCallback(async () => {
@@ -60,6 +63,7 @@ export default function HomePage() {
       .select('*, users:seller_id(full_name, email, avatar_url)')
       .eq('status', 'active')
 
+    if (filterSearch)       query = query.ilike('title_az', `%${filterSearch}%`)
     if (activeGender)       query = query.eq('gender', activeGender)
     if (filterCategory)     query = query.eq('category', filterCategory)
     if (filterSubcategory)  query = query.eq('subcategory', filterSubcategory)
@@ -85,11 +89,10 @@ export default function HomePage() {
       const cards = data.map(
         (
           row: ListingRow & { users?: { full_name: string | null; email: string | null; avatar_url: string | null } | null },
-          i: number
         ) => {
           const u = row.users
           const name = u?.full_name || u?.email?.split('@')[0] || 'Satıcı'
-          return toCard(row, { name, avatar_url: u?.avatar_url ?? null }, i)
+          return toCard(row, { name, avatar_url: u?.avatar_url ?? null })
         }
       )
       setListings(cards)
@@ -97,7 +100,7 @@ export default function HomePage() {
       setListings([])
     }
     setLoading(false)
-  }, [activeGender, filterCategory, filterSubcategory, filterBrand, filterPriceMin, filterPriceMax, filterSizes, filterColors, filterCondition, filterSort])
+  }, [filterSearch, activeGender, filterCategory, filterSubcategory, filterBrand, filterPriceMin, filterPriceMax, filterSizes, filterColors, filterCondition, filterSort])
 
   useEffect(() => { fetchListings() }, [fetchListings])
 
@@ -121,17 +124,6 @@ export default function HomePage() {
     setFilterSizes([])
   }
 
-  // ── SearchBar handlers ──
-  function handleSearchSelect(sub: string, cat: string) {
-    setFilterSubcategory(sub)
-    setFilterCategory(cat)
-    setFilterSizes([])
-  }
-
-  function handleSearchClear() {
-    setFilterSubcategory(null)
-  }
-
   // Sizes shown in the Ölçü dropdown — context-aware
   const availableSizes = filterSubcategory
     ? (SIZES_BY_SUBCATEGORY[filterSubcategory] ?? DEFAULT_SIZES)
@@ -141,62 +133,42 @@ export default function HomePage() {
 
   const GENDER_LABELS: Record<string, string> = { qadin: 'Qadın', kisi: 'Kişi', usaq: 'Uşaq', el: 'Əl işi' }
 
-  const headingLabel = filterSubcategory
+  const headingLabel = filterSearch
+    ? 'Axtarış nəticələri'
+    : filterSubcategory
     ? filterSubcategory
     : filterCategory
     ? filterCategory
     : activeGender
-    ? GENDER_LABELS[activeGender] ?? 'Son Elanlar'
-    : 'Son Elanlar'
+    ? GENDER_LABELS[activeGender] ?? 'Tövsiyə edirik'
+    : 'Tövsiyə edirik'
 
   return (
     <main>
-      {/* ── Hero ── */}
-      <section
-        className="w-full flex flex-col items-center justify-center py-8 px-4 relative overflow-hidden"
-        style={{ backgroundColor: '#1a1040', minHeight: '220px' }}
-      >
-        <div
-          className="absolute top-0 right-0 w-48 h-48 rounded-full opacity-20 blur-3xl"
-          style={{ backgroundColor: '#FF2D78', transform: 'translate(30%, -30%)' }}
-        />
-        <div
-          className="absolute bottom-0 left-0 w-36 h-36 rounded-full opacity-20 blur-3xl"
-          style={{ backgroundColor: '#00E5CC', transform: 'translate(-30%, 30%)' }}
-        />
-        <div className="relative z-10 flex flex-col items-center gap-3">
-          <Image
-            src="/fason-logo (2).png"
-            alt="FASON"
-            width={300}
-            height={150}
-            className="object-contain"
-            priority
-          />
-          <p
-            className="text-white text-center tracking-[0.25em]"
-            style={{ fontFamily: 'var(--font-unbounded)', fontSize: '0.85rem' }}
-          >
-            DOLABINI PULA ÇEVİR
-          </p>
-          <div className="flex gap-6 mt-1">
-            {[
-              { num: '2.4K+', label_az: 'Elan' },
-              { num: '800+', label_az: 'Satıcı' },
-              { num: '12K+', label_az: 'İstifadəçi' },
-            ].map((s) => (
-              <div key={s.label_az} className="text-center">
-                <div className="text-xl font-bold" style={{ color: '#FFE600', fontFamily: 'var(--font-unbounded)' }}>
-                  {s.num}
+      {/* ── Promo banner ── */}
+      <div className="w-full relative overflow-hidden" style={{ background: 'linear-gradient(120deg, #FF2D78 0%, #1a1040 100%)', minHeight: '130px' }}>
+        <div className="max-w-7xl mx-auto px-6 py-8 flex items-center justify-between gap-4">
+          <div>
+            <div className="text-3xl sm:text-4xl font-black text-white leading-tight" style={{ fontFamily: 'var(--font-unbounded)' }}>
+              DOLABINI<br/>PULA ÇEVİR
+            </div>
+            <div className="text-white/70 text-sm mt-1">Azərbaycanda ikinci əl geyim platforması</div>
+            <div className="flex gap-4 mt-3">
+              {[{ num: '2.4K+', label: 'Elan' }, { num: '800+', label: 'Satıcı' }].map(s => (
+                <div key={s.label} className="text-center">
+                  <div className="text-lg font-bold" style={{ color: '#FFE600', fontFamily: 'var(--font-unbounded)' }}>{s.num}</div>
+                  <div className="text-white/50 text-xs">{s.label}</div>
                 </div>
-                <div className="text-white/50 text-xs">{s.label_az}</div>
-              </div>
-            ))}
+              ))}
+            </div>
+          </div>
+          <div className="flex-shrink-0 opacity-20 hidden sm:block">
+            <div className="text-8xl font-black text-white" style={{ fontFamily: 'var(--font-unbounded)' }}>✦</div>
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* ── CategoryNav — sticky below navbar (~65px) ── */}
+      {/* ── CategoryNav — sticky just below navbar (~65px) ── */}
       <div className="sticky top-[65px] z-40">
         <CategoryNav
           onSelect={handleCategoryNavSelect}
@@ -206,23 +178,8 @@ export default function HomePage() {
         />
       </div>
 
-      {/* ── Search + FilterBar — sticky below CategoryNav (~65+44=109px) ── */}
+      {/* ── FilterBar — sticky below navbar + category nav ── */}
       <div className="sticky top-[109px] z-30">
-        {/* Search bar */}
-        <div
-          className="w-full px-4 py-3"
-          style={{ backgroundColor: '#FAF7F2', borderBottom: '2px solid #1a1040' }}
-        >
-          <div className="max-w-7xl mx-auto">
-            <SearchBar
-              selectedSubcategory={filterSubcategory}
-              onSelect={handleSearchSelect}
-              onClear={handleSearchClear}
-            />
-          </div>
-        </div>
-
-        {/* Filter bar — dropdown style */}
         <FilterBar
           availableSizes={availableSizes}
           brand={filterBrand}
@@ -249,6 +206,9 @@ export default function HomePage() {
             style={{ fontFamily: 'var(--font-unbounded)', color: '#1a1040' }}
           >
             {headingLabel}
+            {filterSearch && (
+              <span className="text-sm font-normal text-gray-400 ml-2">&ldquo;{filterSearch}&rdquo;</span>
+            )}
           </h2>
           <span className="text-sm text-gray-400">
             {loading ? '...' : `${listings.length} elan`}
@@ -256,12 +216,12 @@ export default function HomePage() {
         </div>
 
         {loading ? (
-          <div className="columns-2 sm:columns-3 lg:columns-4 xl:columns-5 gap-4 space-y-4">
-            {Array.from({ length: 8 }).map((_, i) => (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {Array.from({ length: 10 }).map((_, i) => (
               <div
                 key={i}
-                className="break-inside-avoid rounded-2xl bg-gray-200 animate-pulse"
-                style={{ height: i % 2 === 0 ? 260 : 220, border: '2px solid #e5e7eb' }}
+                className="rounded-2xl bg-gray-200 animate-pulse"
+                style={{ aspectRatio: '3/4', border: '1px solid #e5e7eb' }}
               />
             ))}
           </div>
@@ -281,6 +241,7 @@ export default function HomePage() {
                 setFilterColors([])
                 setFilterCondition(0)
                 setFilterSort('newest')
+                setFilterSearch('')
               }}
               className="mt-3 text-sm font-semibold underline"
               style={{ color: '#FF2D78' }}
@@ -289,11 +250,9 @@ export default function HomePage() {
             </button>
           </div>
         ) : (
-          <div className="columns-2 sm:columns-3 lg:columns-4 xl:columns-5 gap-4 space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
             {listings.map((listing) => (
-              <div key={listing.id} className="break-inside-avoid">
-                <ListingCard listing={listing} />
-              </div>
+              <ListingCard key={listing.id} listing={listing} />
             ))}
           </div>
         )}

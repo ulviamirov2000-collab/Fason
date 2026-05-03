@@ -20,6 +20,7 @@ export default function Navbar() {
   const [notifCount, setNotifCount] = useState(0)
   const [notifs, setNotifs] = useState<NotifRow[]>([])
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [searchVal, setSearchVal] = useState('')
   const dropdownRef = useRef<HTMLDivElement>(null)
   const notifRef = useRef<HTMLDivElement>(null)
 
@@ -193,6 +194,12 @@ export default function Navbar() {
     router.refresh()
   }
 
+  function handleSearchSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const q = searchVal.trim()
+    router.push(q ? `/?q=${encodeURIComponent(q)}` : '/')
+  }
+
   // Initials avatar from email or name
   const initials = user?.email?.[0]?.toUpperCase() ?? '?'
 
@@ -201,7 +208,7 @@ export default function Navbar() {
       style={{ backgroundColor: '#1a1040' }}
       className="sticky top-0 z-50 w-full border-b-2 border-pink-500"
     >
-      <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-4">
+      <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
         {/* Logo */}
         <Link href="/" className="flex-shrink-0">
           <Image
@@ -212,6 +219,34 @@ export default function Navbar() {
             className="rounded-lg"
           />
         </Link>
+
+        {/* Search bar — hidden on mobile */}
+        <form
+          onSubmit={handleSearchSubmit}
+          className="hidden sm:flex flex-1 items-center h-10 rounded-xl overflow-hidden"
+          style={{
+            backgroundColor: 'rgba(255,255,255,0.1)',
+            border: '2px solid rgba(255,255,255,0.2)',
+          }}
+        >
+          <input
+            type="text"
+            value={searchVal}
+            onChange={e => setSearchVal(e.target.value)}
+            placeholder={lang === 'AZ' ? 'Elan axtar...' : 'Поиск товаров...'}
+            className="flex-1 bg-transparent px-4 text-sm outline-none placeholder-white/40"
+            style={{ color: 'white' }}
+          />
+          <button
+            type="submit"
+            className="flex items-center justify-center w-10 h-full flex-shrink-0 transition-colors hover:bg-white/10"
+            aria-label="Axtar"
+          >
+            <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </button>
+        </form>
 
         {/* Right side */}
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -463,6 +498,33 @@ export default function Navbar() {
       {/* Mobile dropdown */}
       {menuOpen && (
         <div className="sm:hidden px-4 pb-4 flex flex-col gap-2" style={{ backgroundColor: '#1a1040' }}>
+          {/* Mobile search */}
+          <form
+            onSubmit={handleSearchSubmit}
+            className="flex items-center h-10 rounded-xl overflow-hidden mb-1"
+            style={{
+              backgroundColor: 'rgba(255,255,255,0.1)',
+              border: '2px solid rgba(255,255,255,0.2)',
+            }}
+          >
+            <input
+              type="text"
+              value={searchVal}
+              onChange={e => setSearchVal(e.target.value)}
+              placeholder="Elan axtar..."
+              className="flex-1 bg-transparent px-4 text-sm outline-none placeholder-white/40"
+              style={{ color: 'white' }}
+            />
+            <button
+              type="submit"
+              className="flex items-center justify-center w-10 h-full flex-shrink-0"
+              aria-label="Axtar"
+            >
+              <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </button>
+          </form>
           {user ? (
             <>
               <Link
