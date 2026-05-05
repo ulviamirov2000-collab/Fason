@@ -43,8 +43,8 @@ function SectionCard({
   number: number; title: string; badge?: string; children: React.ReactNode
 }) {
   return (
-    <div className="rounded-2xl overflow-hidden" style={{ border: '1.5px solid #e5e7eb', backgroundColor: 'white' }}>
-      <div className="flex items-center gap-3 px-5 py-3.5" style={{ borderBottom: '1.5px solid #e5e7eb', backgroundColor: '#FAFAFA' }}>
+    <div className="rounded-2xl" style={{ border: '1.5px solid #e5e7eb', backgroundColor: 'white' }}>
+      <div className="flex items-center gap-3 px-5 py-3.5 rounded-t-2xl" style={{ borderBottom: '1.5px solid #e5e7eb', backgroundColor: '#FAFAFA' }}>
         <div
           className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
           style={{ backgroundColor: '#FF2D78' }}
