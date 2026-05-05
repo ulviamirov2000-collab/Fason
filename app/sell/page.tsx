@@ -11,9 +11,9 @@ import { sanitize } from '@/lib/sanitize'
 const steps = ['Məlumat', 'Qiymət', 'Yayımla']
 
 const conditions = [
-  { value: 'new', label: 'Yeni', color: '#00E5CC', desc: 'Heç geyilməyib, etiket üstündə ola bilər' },
-  { value: 'good', label: 'Yaxşı', color: '#FF9500', desc: 'Az istifadə edilib, əla vəziyyətdə' },
-  { value: 'fair', label: 'Orta', color: '#FF2D78', desc: 'İstifadə izləri var amma sağlamdır' },
+  { value: 'new',  label: 'Yeni',  color: '#00E5CC', bg: '#E8FFFB', desc: 'Heç geyilməyib, etiket üstündə ola bilər' },
+  { value: 'good', label: 'Yaxşı', color: '#FF9500', bg: '#FFF8EC', desc: 'Az istifadə edilib, əla vəziyyətdə' },
+  { value: 'fair', label: 'Orta',  color: '#FF2D78', bg: '#FFF0F5', desc: 'İstifadə izləri var amma sağlamdır' },
 ]
 
 const COLORS: { name: string; hex: string; border?: boolean }[] = [
@@ -35,6 +35,30 @@ const COLORS: { name: string; hex: string; border?: boolean }[] = [
   { name: 'Çoxrəngli', hex: 'rainbow' },
 ]
 
+const QUICK_PRICES = [5, 10, 20, 30, 50, 80, 100, 150]
+
+function SectionCard({
+  number, title, badge, children,
+}: {
+  number: number; title: string; badge?: string; children: React.ReactNode
+}) {
+  return (
+    <div className="rounded-2xl overflow-hidden" style={{ border: '1.5px solid #e5e7eb', backgroundColor: 'white' }}>
+      <div className="flex items-center gap-3 px-5 py-3.5" style={{ borderBottom: '1.5px solid #e5e7eb', backgroundColor: '#FAFAFA' }}>
+        <div
+          className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+          style={{ backgroundColor: '#FF2D78' }}
+        >
+          {number}
+        </div>
+        <span className="font-bold text-sm" style={{ color: '#1a1040' }}>{title}</span>
+        {badge && <span className="text-xs text-gray-400 ml-auto">{badge}</span>}
+      </div>
+      <div className="p-5">{children}</div>
+    </div>
+  )
+}
+
 export default function SellPage() {
   const router = useRouter()
   const [authChecked, setAuthChecked] = useState(false)
@@ -42,8 +66,8 @@ export default function SellPage() {
   const [step, setStep] = useState(0)
   const [publishing, setPublishing] = useState(false)
   const [publishError, setPublishError] = useState<string | null>(null)
+  const [profileCheckModal, setProfileCheckModal] = useState(false)
 
-  // Subcategory dropdown state
   const [subSearch, setSubSearch] = useState('')
   const [subOpen, setSubOpen] = useState(false)
   const subInputRef = useRef<HTMLInputElement>(null)
@@ -60,7 +84,6 @@ export default function SellPage() {
   const [form, setForm] = useState({
     gender: '',
     title_az: '',
-    title_ru: '',
     description_az: '',
     category: '',
     subcategory: '',
@@ -73,13 +96,11 @@ export default function SellPage() {
 
   const update = (field: string, val: string) => setForm((f) => ({ ...f, [field]: val }))
 
-  // Filtered subcategory list based on search input
   const allSubs = form.category ? (SUBCATEGORIES[form.category] ?? []) : []
   const filteredSubs = subSearch
     ? allSubs.filter((s) => s.toLowerCase().includes(subSearch.toLowerCase()))
     : allSubs
 
-  // Sizes for selected subcategory
   const sizes = form.subcategory
     ? (SIZES_BY_SUBCATEGORY[form.subcategory] ?? DEFAULT_SIZES)
     : DEFAULT_SIZES
@@ -98,20 +119,14 @@ export default function SellPage() {
 
   const step0Valid = !!(form.gender && form.category && form.subcategory && form.color && form.condition)
 
-  const [profileCheckModal, setProfileCheckModal] = useState(false)
-
   async function publishListing() {
     if (!userId) { setPublishError('İstifadəçi tapılmadı. Yenidən daxil olun.'); return }
-    if (!form.title_az.trim()) { setPublishError('Başlıq tələb olunur (Azərbaycanca).'); return }
+    if (!form.title_az.trim()) { setPublishError('Məhsulun adı tələb olunur.'); return }
     if (!form.price || parseFloat(form.price) <= 0) { setPublishError('Düzgün qiymət daxil edin.'); return }
     if (!form.condition) { setPublishError('Vəziyyət seçilməlidir.'); return }
 
-    // Check profile completeness (phone + address required)
     const { data: userProfile } = await supabase
-      .from('users')
-      .select('phone, address')
-      .eq('id', userId)
-      .single()
+      .from('users').select('phone, address').eq('id', userId).single()
     if (!userProfile?.phone || !(userProfile as { phone?: string | null; address?: string | null }).address) {
       setProfileCheckModal(true)
       return
@@ -120,27 +135,23 @@ export default function SellPage() {
     setPublishing(true)
     setPublishError(null)
 
-    // Rate limit: max 20 active listings per user
     const { count: activeCount } = await supabase
-      .from('listings')
-      .select('id', { count: 'exact', head: true })
-      .eq('seller_id', userId)
-      .eq('status', 'active')
+      .from('listings').select('id', { count: 'exact', head: true })
+      .eq('seller_id', userId).eq('status', 'active')
     if ((activeCount ?? 0) >= 20) {
       setPublishError('Maksimum 20 aktiv elan yerləşdirə bilərsiniz')
       setPublishing(false)
       return
     }
 
-    const uploadedUrls = photos
-      .filter((p) => p.storageUrl !== null)
-      .map((p) => p.storageUrl as string)
+    const uploadedUrls = photos.filter((p) => p.storageUrl !== null).map((p) => p.storageUrl as string)
+    const title = sanitize(form.title_az)
 
     const payload = {
       seller_id: userId,
       gender: form.gender || null,
-      title_az: sanitize(form.title_az),
-      title_ru: sanitize(form.title_ru) || sanitize(form.title_az),
+      title_az: title,
+      title_ru: title,
       description_az: sanitize(form.description_az) || null,
       price: parseFloat(form.price),
       category: form.category || null,
@@ -154,256 +165,335 @@ export default function SellPage() {
     }
 
     const { data, error } = await supabase.from('listings').insert(payload).select().single()
-
     setPublishing(false)
-    if (error) {
-      setPublishError(`Xəta: ${error.message} (${error.code})`)
-      return
-    }
+    if (error) { setPublishError(`Xəta: ${error.message} (${error.code})`); return }
     console.log('[publish] success:', data)
     router.push('/')
   }
 
   if (!authChecked) return null
 
-  const inputClass = 'w-full px-4 py-3 rounded-xl text-sm outline-none'
-  const inputStyle = { border: '2px solid #1a1040', backgroundColor: 'white' }
-
-  // Chip button style helpers
-  const chipSelected = { backgroundColor: '#FF2D78', border: '2px solid #1a1040', color: 'white' }
-  const chipDefault  = { backgroundColor: 'white',   border: '2px solid #1a1040', color: '#1a1040' }
+  const chipSel = { backgroundColor: '#FF2D78', border: '2px solid #FF2D78', color: 'white' }
+  const chipDef = { backgroundColor: 'white', border: '1.5px solid #d1d5db', color: '#374151' }
 
   return (
-    <main className="min-h-screen px-4 py-10 max-w-2xl mx-auto">
-      <h1
-        className="text-2xl font-bold mb-2"
-        style={{ fontFamily: 'var(--font-unbounded)', color: '#1a1040' }}
-      >
-        Elan ver
-      </h1>
-      <p className="text-sm text-gray-500 mb-8">Paltarını sat, pul qazan!</p>
+    <main className="min-h-screen py-8 px-4 max-w-xl mx-auto">
+
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold" style={{ fontFamily: 'var(--font-unbounded)', color: '#1a1040' }}>
+          Elan ver
+        </h1>
+        <p className="text-sm text-gray-400 mt-1">Paltarını sat, pul qazan!</p>
+      </div>
 
       {/* Step indicator */}
-      <div className="flex items-center gap-2 mb-10">
+      <div className="flex items-center mb-8">
         {steps.map((s, i) => (
-          <div key={s} className="flex items-center gap-2">
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold cursor-pointer transition-all"
-              style={
-                i === step
-                  ? { backgroundColor: '#FF2D78', color: 'white', border: '2px solid #1a1040' }
-                  : i < step
-                  ? { backgroundColor: '#00E5CC', color: '#1a1040', border: '2px solid #1a1040' }
-                  : { backgroundColor: 'white', color: '#999', border: '2px solid #ccc' }
-              }
+          <div key={s} className="flex items-center flex-1 last:flex-none">
+            <button
+              className="flex items-center gap-2 flex-shrink-0"
               onClick={() => i < step && setStep(i)}
             >
-              {i < step ? '✓' : i + 1}
-            </div>
-            <span className={`text-xs font-medium ${i === step ? 'text-gray-900' : 'text-gray-400'}`}>
-              {s}
-            </span>
-            {i < steps.length - 1 && <div className="w-6 h-px bg-gray-300" />}
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all"
+                style={
+                  i === step
+                    ? { backgroundColor: '#FF2D78', color: 'white', boxShadow: '0 0 0 3px #FFE6EF' }
+                    : i < step
+                    ? { backgroundColor: '#00E5CC', color: '#1a1040' }
+                    : { backgroundColor: '#F3F4F6', color: '#9CA3AF' }
+                }
+              >
+                {i < step ? (
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                ) : i + 1}
+              </div>
+              <span className="text-xs font-semibold hidden sm:block" style={{ color: i === step ? '#1a1040' : '#9CA3AF' }}>
+                {s}
+              </span>
+            </button>
+            {i < steps.length - 1 && (
+              <div className="flex-1 h-px mx-3" style={{ backgroundColor: i < step ? '#00E5CC' : '#E5E7EB' }} />
+            )}
           </div>
         ))}
       </div>
 
-      {/* ─── Step 0 — Photos + Details ──────────────────────────────── */}
+      {/* ─── Step 0 — Məlumat ─────────────────────────────── */}
       {step === 0 && (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4">
 
-          {/* Photos */}
-          <div>
-            <p className="text-sm font-semibold mb-3" style={{ color: '#1a1040' }}>
-              Fotolar <span className="font-normal text-gray-400">(isteğe bağlı)</span>
-            </p>
+          {/* Section 1: Photos */}
+          <SectionCard number={1} title="Fotolar" badge="isteğe bağlı">
             <CameraCapture userId={userId!} onChange={setPhotos} maxPhotos={5} />
-          </div>
+          </SectionCard>
 
-          <div className="border-t border-gray-200" />
-
-          {/* Text fields */}
-          <input
-            className={inputClass}
-            style={inputStyle}
-            placeholder="Başlıq (Azərbaycanca) *"
-            value={form.title_az}
-            onChange={(e) => update('title_az', e.target.value)}
-          />
-          <input
-            className={inputClass}
-            style={inputStyle}
-            placeholder="Başlıq (Rusca)"
-            value={form.title_ru}
-            onChange={(e) => update('title_ru', e.target.value)}
-          />
-          <textarea
-            className={inputClass}
-            style={{ ...inputStyle, resize: 'none' }}
-            rows={3}
-            placeholder="Təsvir (Azərbaycanca)"
-            value={form.description_az}
-            onChange={(e) => update('description_az', e.target.value)}
-          />
-          <input
-            className={inputClass}
-            style={inputStyle}
-            placeholder="Brend (məs: Zara, Nike...)"
-            value={form.brand}
-            onChange={(e) => update('brand', e.target.value)}
-          />
-
-          {/* Gender chips */}
-          <div>
-            <p className="text-sm font-semibold mb-2" style={{ color: '#1a1040' }}>
-              Kimə aiddir <span style={{ color: '#FF2D78' }}>*</span>
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {[
-                { value: 'qadin', label: 'Qadın' },
-                { value: 'kisi',  label: 'Kişi'  },
-                { value: 'usaq',  label: 'Uşaq'  },
-                { value: 'el',    label: 'Əl işi' },
-              ].map((g) => (
-                <button key={g.value}
-                  onClick={() => { setForm((f) => ({ ...f, gender: g.value, category: '', subcategory: '', size: '' })); setSubSearch('') }}
-                  className="px-4 py-2 rounded-full text-sm font-semibold transition-all"
-                  style={form.gender === g.value ? chipSelected : chipDefault}>
-                  {g.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Category chips */}
-          <div>
-            <p className="text-sm font-semibold mb-2" style={{ color: '#1a1040' }}>
-              Kateqoriya <span style={{ color: '#FF2D78' }}>*</span>
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {CATEGORIES.map((cat) => (
-                <button key={cat} onClick={() => selectCategory(cat)}
-                  className="px-4 py-2 rounded-full text-sm font-semibold transition-all"
-                  style={form.category === cat ? chipSelected : chipDefault}>
-                  {cat}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Subcategory dropdown */}
-          {form.category && (
-            <div>
-              <p className="text-sm font-semibold mb-2" style={{ color: '#1a1040' }}>
-                Növ <span style={{ color: '#FF2D78' }}>*</span>
-              </p>
+          {/* Section 2: Product info */}
+          <SectionCard number={2} title="Məhsul haqqında">
+            <div className="flex flex-col gap-3">
               <div className="relative">
-                <div className="flex items-center gap-2 px-4 py-3 rounded-xl cursor-text"
-                  style={{ border: `2px solid ${form.subcategory ? '#FF2D78' : '#1a1040'}`, backgroundColor: 'white' }}
-                  onClick={() => { setSubOpen(true); subInputRef.current?.focus() }}>
-                  {form.subcategory && !subOpen ? (
-                    <>
-                      <span className="flex-1 text-sm font-semibold" style={{ color: '#1a1040' }}>{form.subcategory}</span>
-                      <button onClick={(e) => { e.stopPropagation(); selectSubcategory(''); setSubOpen(true); subInputRef.current?.focus() }}
-                        className="text-gray-400 hover:text-gray-700 text-lg leading-none flex-shrink-0">×</button>
-                    </>
-                  ) : (
-                    <input ref={subInputRef} type="text" value={subSearch}
-                      onChange={(e) => { setSubSearch(e.target.value); setSubOpen(true) }}
-                      onFocus={() => setSubOpen(true)}
-                      onBlur={() => setTimeout(() => setSubOpen(false), 150)}
-                      placeholder={form.subcategory || 'Növü axtar və ya seçin...'}
-                      className="flex-1 text-sm outline-none bg-transparent" />
-                  )}
+                <input
+                  className="w-full px-4 pt-5 pb-2.5 rounded-xl text-sm outline-none transition-all peer"
+                  style={{ border: '1.5px solid #d1d5db', backgroundColor: 'white' }}
+                  placeholder=" "
+                  value={form.title_az}
+                  onChange={(e) => update('title_az', e.target.value)}
+                  onFocus={(e) => (e.target.style.borderColor = '#FF2D78')}
+                  onBlur={(e) => (e.target.style.borderColor = '#d1d5db')}
+                  id="title-field"
+                />
+                <label
+                  htmlFor="title-field"
+                  className="absolute left-4 top-1.5 text-xs font-semibold pointer-events-none"
+                  style={{ color: '#FF2D78' }}
+                >
+                  Məhsulun adı <span>*</span>
+                </label>
+              </div>
+
+              <div className="relative">
+                <textarea
+                  className="w-full px-4 pt-5 pb-2.5 rounded-xl text-sm outline-none resize-none transition-all"
+                  style={{ border: '1.5px solid #d1d5db', backgroundColor: 'white' }}
+                  rows={3}
+                  placeholder=" "
+                  value={form.description_az}
+                  onChange={(e) => update('description_az', e.target.value)}
+                  onFocus={(e) => (e.target.style.borderColor = '#FF2D78')}
+                  onBlur={(e) => (e.target.style.borderColor = '#d1d5db')}
+                  id="desc-field"
+                />
+                <label
+                  htmlFor="desc-field"
+                  className="absolute left-4 top-1.5 text-xs font-semibold pointer-events-none"
+                  style={{ color: '#9CA3AF' }}
+                >
+                  Qısa təsvir
+                </label>
+              </div>
+
+              <div className="relative">
+                <input
+                  className="w-full px-4 pt-5 pb-2.5 rounded-xl text-sm outline-none transition-all"
+                  style={{ border: '1.5px solid #d1d5db', backgroundColor: 'white' }}
+                  placeholder=" "
+                  value={form.brand}
+                  onChange={(e) => update('brand', e.target.value)}
+                  onFocus={(e) => (e.target.style.borderColor = '#FF2D78')}
+                  onBlur={(e) => (e.target.style.borderColor = '#d1d5db')}
+                  id="brand-field"
+                />
+                <label
+                  htmlFor="brand-field"
+                  className="absolute left-4 top-1.5 text-xs font-semibold pointer-events-none"
+                  style={{ color: '#9CA3AF' }}
+                >
+                  Brend adı (məs: Zara, Nike...)
+                </label>
+              </div>
+            </div>
+          </SectionCard>
+
+          {/* Section 3: Category */}
+          <SectionCard number={3} title="Kateqoriya" badge="* tələb olunur">
+            <div className="flex flex-col gap-5">
+
+              {/* Gender */}
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-2.5" style={{ color: '#6B7280' }}>
+                  Kimə aiddir
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { value: 'qadin', label: 'Qadın' },
+                    { value: 'kisi',  label: 'Kişi'  },
+                    { value: 'usaq',  label: 'Uşaq'  },
+                    { value: 'el',    label: 'Əl işi' },
+                  ].map((g) => (
+                    <button key={g.value}
+                      onClick={() => { setForm((f) => ({ ...f, gender: g.value, category: '', subcategory: '', size: '' })); setSubSearch('') }}
+                      className="px-4 py-2 rounded-full text-sm font-semibold transition-all"
+                      style={form.gender === g.value ? chipSel : chipDef}>
+                      {g.label}
+                    </button>
+                  ))}
                 </div>
-                {subOpen && filteredSubs.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 z-20 mt-1 rounded-xl overflow-hidden overflow-y-auto"
-                    style={{ border: '2px solid #1a1040', backgroundColor: 'white', maxHeight: '220px', boxShadow: '3px 3px 0 #1a1040' }}>
-                    {filteredSubs.map((sub) => (
-                      <button key={sub} onMouseDown={(e) => e.preventDefault()} onClick={() => selectSubcategory(sub)}
-                        className="w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-pink-50"
-                        style={sub === form.subcategory ? { backgroundColor: '#FFF0F5', fontWeight: 600, color: '#FF2D78' } : { color: '#1a1040' }}>
-                        {sub}
+              </div>
+
+              {/* Category */}
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-2.5" style={{ color: '#6B7280' }}>
+                  Kateqoriya
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {CATEGORIES.map((cat) => (
+                    <button key={cat} onClick={() => selectCategory(cat)}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-all"
+                      style={form.category === cat ? chipSel : chipDef}>
+                      <span>{CATEGORY_EMOJIS[cat]}</span>
+                      <span>{cat}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Subcategory */}
+              {form.category && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide mb-2.5" style={{ color: '#6B7280' }}>
+                    Növ
+                  </p>
+                  <div className="relative">
+                    <div
+                      className="flex items-center gap-2 px-4 py-3 rounded-xl cursor-text transition-all"
+                      style={{ border: `1.5px solid ${form.subcategory ? '#FF2D78' : '#d1d5db'}`, backgroundColor: 'white' }}
+                      onClick={() => { setSubOpen(true); subInputRef.current?.focus() }}
+                    >
+                      {form.subcategory && !subOpen ? (
+                        <>
+                          <span className="flex-1 text-sm font-semibold" style={{ color: '#1a1040' }}>{form.subcategory}</span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); selectSubcategory(''); setSubOpen(true); subInputRef.current?.focus() }}
+                            className="text-gray-400 hover:text-gray-600 text-lg leading-none flex-shrink-0"
+                          >×</button>
+                        </>
+                      ) : (
+                        <input
+                          ref={subInputRef}
+                          type="text"
+                          value={subSearch}
+                          onChange={(e) => { setSubSearch(e.target.value); setSubOpen(true) }}
+                          onFocus={() => setSubOpen(true)}
+                          onBlur={() => setTimeout(() => setSubOpen(false), 150)}
+                          placeholder={form.subcategory || 'Növü axtar və ya seçin...'}
+                          className="flex-1 text-sm outline-none bg-transparent"
+                        />
+                      )}
+                    </div>
+                    {subOpen && filteredSubs.length > 0 && (
+                      <div
+                        className="absolute top-full left-0 right-0 z-20 mt-1 rounded-xl overflow-hidden overflow-y-auto"
+                        style={{ border: '1.5px solid #e5e7eb', backgroundColor: 'white', maxHeight: '220px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }}
+                      >
+                        {filteredSubs.map((sub) => (
+                          <button
+                            key={sub}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => selectSubcategory(sub)}
+                            className="w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-gray-50"
+                            style={sub === form.subcategory ? { backgroundColor: '#FFF0F5', fontWeight: 600, color: '#FF2D78' } : { color: '#1a1040' }}
+                          >
+                            {sub}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {subOpen && filteredSubs.length === 0 && (
+                      <div
+                        className="absolute top-full left-0 right-0 z-20 mt-1 rounded-xl px-4 py-3 text-sm text-gray-400"
+                        style={{ border: '1.5px solid #e5e7eb', backgroundColor: 'white' }}
+                      >
+                        Nəticə tapılmadı
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </SectionCard>
+
+          {/* Section 4: Details */}
+          {form.subcategory && (
+            <SectionCard number={4} title="Detallar" badge="* tələb olunur">
+              <div className="flex flex-col gap-5">
+
+                {/* Color */}
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: '#6B7280' }}>
+                    Rəng {form.color && <span style={{ color: '#FF2D78' }}>· {form.color}</span>}
+                  </p>
+                  <div className="flex flex-wrap gap-2.5">
+                    {COLORS.map((c) => {
+                      const selected = form.color === c.name
+                      return (
+                        <button
+                          key={c.name}
+                          onClick={() => update('color', selected ? '' : c.name)}
+                          title={c.name}
+                          className="w-9 h-9 rounded-full flex-shrink-0 transition-transform hover:scale-110 active:scale-95"
+                          style={{
+                            background: c.hex === 'rainbow' ? 'conic-gradient(red,orange,yellow,green,cyan,blue,violet,red)' : c.hex,
+                            border: selected ? '3px solid #FF2D78' : c.border ? '2px solid #ccc' : '2px solid transparent',
+                            boxShadow: selected ? '0 0 0 2px white, 0 0 0 4px #FF2D78' : undefined,
+                          }}
+                        />
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Size */}
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide mb-2.5" style={{ color: '#6B7280' }}>
+                    Ölçü <span className="normal-case font-normal">(isteğe bağlı)</span>
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {sizes.map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => update('size', form.size === s ? '' : s)}
+                        className="min-w-[44px] px-3 py-2 rounded-xl text-xs font-bold transition-all"
+                        style={form.size === s
+                          ? { backgroundColor: '#FFE600', color: '#1a1040', border: '2px solid #1a1040' }
+                          : { backgroundColor: 'white', color: '#374151', border: '1.5px solid #d1d5db' }}
+                      >
+                        {s}
                       </button>
                     ))}
                   </div>
-                )}
-                {subOpen && filteredSubs.length === 0 && (
-                  <div className="absolute top-full left-0 right-0 z-20 mt-1 rounded-xl px-4 py-3 text-sm text-gray-400"
-                    style={{ border: '2px solid #e5e7eb', backgroundColor: 'white' }}>
-                    Nəticə tapılmadı
+                </div>
+
+                {/* Condition */}
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide mb-2.5" style={{ color: '#6B7280' }}>
+                    Vəziyyət
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    {conditions.map((c) => (
+                      <button
+                        key={c.value}
+                        onClick={() => update('condition', c.value)}
+                        className="flex items-center gap-3 px-4 py-3.5 rounded-xl text-left transition-all"
+                        style={form.condition === c.value
+                          ? { border: `2px solid ${c.color}`, backgroundColor: c.bg }
+                          : { border: '1.5px solid #e5e7eb', backgroundColor: 'white' }}
+                      >
+                        <div className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: c.color }} />
+                        <div>
+                          <div className="text-sm font-semibold" style={{ color: '#1a1040' }}>{c.label}</div>
+                          <div className="text-xs text-gray-400 mt-0.5">{c.desc}</div>
+                        </div>
+                        {form.condition === c.value && (
+                          <div className="ml-auto">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                          </div>
+                        )}
+                      </button>
+                    ))}
                   </div>
-                )}
+                </div>
               </div>
-            </div>
+            </SectionCard>
           )}
 
-          {/* Color picker */}
-          {form.subcategory && (
-            <div>
-              <p className="text-sm font-semibold mb-3" style={{ color: '#1a1040' }}>
-                Rəng <span style={{ color: '#FF2D78' }}>*</span>
-              </p>
-              <div className="flex flex-wrap gap-3">
-                {COLORS.map((c) => {
-                  const selected = form.color === c.name
-                  return (
-                    <button key={c.name} onClick={() => update('color', selected ? '' : c.name)} title={c.name}
-                      className="w-10 h-10 rounded-full flex-shrink-0 transition-transform hover:scale-110 active:scale-95"
-                      style={{
-                        background: c.hex === 'rainbow' ? 'conic-gradient(red, orange, yellow, green, cyan, blue, violet, red)' : c.hex,
-                        border: selected ? '3px solid #FF2D78' : c.border ? '2px solid #ccc' : '2px solid transparent',
-                        boxShadow: selected ? '0 0 0 2px white, 0 0 0 4px #FF2D78' : undefined,
-                      }} />
-                  )
-                })}
-              </div>
-              {form.color && <p className="mt-2 text-xs font-semibold" style={{ color: '#FF2D78' }}>✓ {form.color}</p>}
-            </div>
-          )}
-
-          {/* Size chips */}
-          {form.subcategory && (
-            <div>
-              <p className="text-sm font-semibold mb-2" style={{ color: '#1a1040' }}>Ölçü</p>
-              <div className="flex flex-wrap gap-2">
-                {sizes.map((s) => (
-                  <button key={s} onClick={() => update('size', form.size === s ? '' : s)}
-                    className="min-w-[44px] px-3 py-2 rounded-xl text-xs font-bold transition-all"
-                    style={form.size === s
-                      ? { backgroundColor: '#FFE600', color: '#1a1040', border: '2px solid #1a1040' }
-                      : { backgroundColor: 'white', color: '#1a1040', border: '2px solid #ccc' }}>
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Condition */}
-          <div>
-            <p className="text-sm font-semibold mb-2" style={{ color: '#1a1040' }}>
-              Vəziyyət <span style={{ color: '#FF2D78' }}>*</span>
-            </p>
-            <div className="flex flex-col gap-2">
-              {conditions.map((c) => (
-                <button key={c.value} onClick={() => update('condition', c.value)}
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all"
-                  style={form.condition === c.value
-                    ? { border: `2px solid ${c.color}`, backgroundColor: `${c.color}20` }
-                    : { border: '2px solid #ccc', backgroundColor: 'white' }}>
-                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: c.color }} />
-                  <div>
-                    <div className="text-sm font-semibold">{c.label}</div>
-                    <div className="text-xs text-gray-500">{c.desc}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
+          {/* Validation hint */}
           {!step0Valid && (
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-center py-2" style={{ color: '#9CA3AF' }}>
               {!form.gender ? '↑ Kimə aid olduğu seçilməlidir'
                 : !form.category ? '↑ Kateqoriya seçilməlidir'
                 : !form.subcategory ? '↑ Növ seçilməlidir'
@@ -414,119 +504,167 @@ export default function SellPage() {
         </div>
       )}
 
-      {/* ─── Step 1 — Price ─────────────────────────────────────────── */}
+      {/* ─── Step 1 — Qiymət ──────────────────────────────── */}
       {step === 1 && (
-        <div className="flex flex-col gap-6">
-          <h2 className="text-lg font-bold" style={{ color: '#1a1040' }}>Qiymət</h2>
+        <div className="flex flex-col gap-4">
           <div
-            className="flex items-center gap-3 bg-white rounded-2xl px-5 py-4"
-            style={{ border: '2px solid #1a1040' }}
+            className="rounded-2xl overflow-hidden"
+            style={{ border: '1.5px solid #e5e7eb', backgroundColor: 'white' }}
           >
-            <span className="text-3xl font-bold" style={{ color: '#FF2D78' }}>₼</span>
-            <input
-              type="number"
-              placeholder="0"
-              value={form.price}
-              onChange={(e) => update('price', e.target.value)}
-              className="flex-1 text-3xl font-bold outline-none bg-transparent"
-              style={{ color: '#1a1040' }}
-            />
+            <div className="px-5 py-3.5" style={{ borderBottom: '1.5px solid #e5e7eb', backgroundColor: '#FAFAFA' }}>
+              <p className="text-sm font-bold" style={{ color: '#1a1040' }}>Satış qiyməti</p>
+              <p className="text-xs text-gray-400 mt-0.5">Ədalətli qiymət daha tez satışa kömək edir</p>
+            </div>
+            <div className="p-5">
+              <div
+                className="flex items-center gap-3 rounded-xl px-4 py-3 transition-all"
+                style={{ border: '1.5px solid #d1d5db', backgroundColor: 'white' }}
+                onFocusCapture={(e) => (e.currentTarget.style.borderColor = '#FF2D78')}
+                onBlurCapture={(e) => (e.currentTarget.style.borderColor = '#d1d5db')}
+              >
+                <span className="text-3xl font-black flex-shrink-0" style={{ color: '#FF2D78', fontFamily: 'var(--font-unbounded)' }}>₼</span>
+                <input
+                  type="number"
+                  placeholder="0"
+                  value={form.price}
+                  onChange={(e) => update('price', e.target.value)}
+                  className="flex-1 text-4xl font-black outline-none bg-transparent"
+                  style={{ color: '#1a1040', fontFamily: 'var(--font-unbounded)' }}
+                />
+              </div>
+
+              {/* Quick price chips */}
+              <div className="mt-4">
+                <p className="text-xs text-gray-400 mb-2.5">Sürətli seçim</p>
+                <div className="flex flex-wrap gap-2">
+                  {QUICK_PRICES.map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => update('price', String(p))}
+                      className="px-3.5 py-1.5 rounded-full text-sm font-bold transition-all"
+                      style={form.price === String(p)
+                        ? { backgroundColor: '#FF2D78', color: 'white', border: '2px solid #FF2D78' }
+                        : { backgroundColor: 'white', color: '#374151', border: '1.5px solid #d1d5db' }}
+                    >
+                      {p} ₼
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="bg-yellow-50 rounded-xl p-4" style={{ border: '2px solid #FFE600' }}>
-            <p className="text-sm font-semibold" style={{ color: '#1a1040' }}>💡 Qiymət məsləhəti</p>
-            <p className="text-xs text-gray-600 mt-1">
-              Oxşar məhsullar ortalama <strong>25–60 ₼</strong> arasında satılır. Ədalətli qiymət daha tez satışa kömək edir.
-            </p>
+
+          {/* Tip */}
+          <div className="flex gap-3 px-4 py-3.5 rounded-2xl" style={{ backgroundColor: '#FFFBEB', border: '1.5px solid #FDE68A' }}>
+            <span className="text-xl flex-shrink-0">💡</span>
+            <div>
+              <p className="text-sm font-semibold" style={{ color: '#92400E' }}>Qiymət məsləhəti</p>
+              <p className="text-xs mt-0.5" style={{ color: '#B45309' }}>
+                Oxşar məhsullar <strong>25–60 ₼</strong> arasında satılır. Ədalətli qiymət daha çox alıcı cəlb edir.
+              </p>
+            </div>
           </div>
         </div>
       )}
 
-      {/* ─── Step 2 — Publish ───────────────────────────────────────── */}
+      {/* ─── Step 2 — Yayımla ─────────────────────────────── */}
       {step === 2 && (
-        <div className="text-center flex flex-col items-center gap-4 py-6">
-          <div className="text-6xl">🎉</div>
-          <h2 className="text-xl font-bold" style={{ fontFamily: 'var(--font-unbounded)', color: '#1a1040' }}>
-            Elanın hazırdır!
-          </h2>
-          <p className="text-sm text-gray-500 max-w-xs">
-            Elanını yayımla, alıcıların sənə çatacaq!
-          </p>
+        <div className="flex flex-col gap-4">
+          {/* Summary card */}
+          <div className="rounded-2xl overflow-hidden" style={{ border: '1.5px solid #e5e7eb' }}>
+            <div className="px-5 py-3.5 flex items-center justify-between" style={{ borderBottom: '1.5px solid #e5e7eb', backgroundColor: '#FAFAFA' }}>
+              <p className="text-sm font-bold" style={{ color: '#1a1040' }}>Elanın icmalı</p>
+              <button onClick={() => setStep(0)} className="text-xs font-semibold underline" style={{ color: '#FF2D78' }}>
+                Düzəlt
+              </button>
+            </div>
+            <div className="p-5 bg-white flex gap-4">
+              {photos.length > 0 ? (
+                <div className="flex gap-2 flex-shrink-0">
+                  {photos.slice(0, 3).map((p, i) => (
+                    <div key={p.id} className="relative rounded-xl overflow-hidden" style={{ width: 64, height: 80, border: '1.5px solid #e5e7eb' }}>
+                      <Image src={p.previewUrl} alt={`Foto ${i + 1}`} fill className="object-cover" unoptimized />
+                    </div>
+                  ))}
+                  {photos.length > 3 && (
+                    <div className="w-16 h-20 rounded-xl flex items-center justify-center text-sm font-bold" style={{ border: '1.5px solid #e5e7eb', color: '#9CA3AF' }}>
+                      +{photos.length - 3}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="w-16 h-20 rounded-xl flex items-center justify-center flex-shrink-0" style={{ border: '1.5px dashed #e5e7eb', backgroundColor: '#F9FAFB' }}>
+                  <span className="text-2xl">👗</span>
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-sm truncate" style={{ color: '#1a1040' }}>
+                  {form.title_az || <span className="text-gray-400 font-normal">Ad daxil edilməyib</span>}
+                </p>
+                <p className="text-2xl font-black mt-1" style={{ color: '#FF2D78', fontFamily: 'var(--font-unbounded)' }}>
+                  {form.price ? `${form.price} ₼` : '—'}
+                </p>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {form.category && (
+                    <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#F3F4F6', color: '#374151' }}>
+                      {CATEGORY_EMOJIS[form.category]} {form.category}
+                    </span>
+                  )}
+                  {form.subcategory && (
+                    <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#FFF0F5', color: '#FF2D78' }}>
+                      {form.subcategory}
+                    </span>
+                  )}
+                  {form.size && (
+                    <span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ backgroundColor: '#FFE600', color: '#1a1040' }}>
+                      {form.size}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
 
-          {/* Summary */}
-          {(form.category || form.subcategory) && (
-            <div
-              className="flex items-center gap-2 px-4 py-2 rounded-full text-sm"
-              style={{ backgroundColor: '#FAF7F2', border: '2px solid #1a1040' }}
-            >
-              <span>{CATEGORY_EMOJIS[form.category]}</span>
-              <span className="font-medium" style={{ color: '#1a1040' }}>
-                {form.category}{form.subcategory ? ` › ${form.subcategory}` : ''}
-              </span>
-              {form.size && (
-                <span
-                  className="px-2 py-0.5 rounded-full text-xs font-bold"
-                  style={{ backgroundColor: '#FFE600', color: '#1a1040' }}
-                >
-                  {form.size}
-                </span>
-              )}
-              {form.color && (
-                <span className="text-xs text-gray-500">{form.color}</span>
-              )}
+          {photos.some((p) => p.uploading) && (
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ backgroundColor: '#F0FFF9', border: '1.5px solid #A7F3D0' }}>
+              <div className="w-4 h-4 rounded-full border-2 border-emerald-200 border-t-emerald-500 animate-spin flex-shrink-0" />
+              <p className="text-sm text-emerald-700">Fotolar yüklənir, gözləyin...</p>
             </div>
           )}
 
           {publishError && (
-            <div
-              className="w-full px-4 py-3 rounded-xl text-sm"
-              style={{ backgroundColor: '#FFF0F5', border: '2px solid #FF2D78', color: '#FF2D78' }}
-            >
-              {publishError}
+            <div className="px-4 py-3 rounded-xl text-sm" style={{ backgroundColor: '#FFF0F5', border: '1.5px solid #FF2D78', color: '#CC0044' }}>
+              ⚠ {publishError}
             </div>
           )}
-          {photos.length > 0 && (
-            <div className="flex gap-2 justify-center">
-              {photos.slice(0, 3).map((p, i) => (
-                <div
-                  key={p.id}
-                  className="relative w-16 h-20 rounded-xl overflow-hidden"
-                  style={{ border: '2px solid #1a1040' }}
-                >
-                  <Image src={p.previewUrl} alt={`Foto ${i + 1}`} fill className="object-cover" unoptimized />
-                </div>
-              ))}
-              {photos.length > 3 && (
-                <div
-                  className="w-16 h-20 rounded-xl flex items-center justify-center text-sm font-bold"
-                  style={{ border: '2px solid #ccc', color: '#999' }}
-                >
-                  +{photos.length - 3}
-                </div>
-              )}
-            </div>
-          )}
-          {photos.some((p) => p.uploading) && (
-            <p className="text-xs text-gray-400">⏳ Fotolar yüklənir, gözləyin...</p>
-          )}
+
           <button
             onClick={publishListing}
             disabled={publishing || photos.some((p) => p.uploading)}
-            className="px-8 py-3 rounded-full font-bold text-white transition-transform hover:scale-105 disabled:opacity-60 disabled:cursor-not-allowed"
-            style={{ backgroundColor: '#FF2D78', border: '2px solid #1a1040' }}
+            className="w-full py-4 rounded-2xl font-bold text-white text-base transition-transform hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
+            style={{ backgroundColor: '#FF2D78', border: '2px solid #1a1040', boxShadow: '3px 3px 0 #1a1040' }}
           >
-            {publishing ? 'Yayımlanır...' : 'Yayımla'}
+            {publishing ? (
+              <span className="flex items-center justify-center gap-2">
+                <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                Yayımlanır...
+              </span>
+            ) : '✦ Elanı yayımla'}
           </button>
         </div>
       )}
 
       {/* Navigation */}
-      <div className="flex justify-between mt-10">
+      <div className="flex justify-between mt-8">
         <button
           onClick={() => setStep((s) => Math.max(0, s - 1))}
-          className="px-5 py-2.5 rounded-xl font-semibold text-sm transition-all"
-          style={{ border: '2px solid #1a1040', color: '#1a1040', visibility: step === 0 ? 'hidden' : 'visible' }}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all hover:bg-gray-50"
+          style={{ border: '1.5px solid #d1d5db', color: '#374151', visibility: step === 0 ? 'hidden' : 'visible' }}
         >
-          ← Geri
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+          Geri
         </button>
         {step < steps.length - 1 && (
           <button
@@ -535,24 +673,21 @@ export default function SellPage() {
               setStep((s) => Math.min(steps.length - 1, s + 1))
             }}
             disabled={step === 0 && !step0Valid}
-            className="px-5 py-2.5 rounded-xl font-bold text-white text-sm transition-transform hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ backgroundColor: '#FF2D78' }}
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-white text-sm transition-transform hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ backgroundColor: '#FF2D78', boxShadow: '2px 2px 0 #1a1040' }}
           >
-            İrəli →
+            İrəli
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
           </button>
         )}
       </div>
 
       {/* Profile completeness modal */}
       {profileCheckModal && userId && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
-        >
-          <div
-            className="w-full max-w-sm rounded-3xl p-6 flex flex-col gap-4 text-center"
-            style={{ backgroundColor: 'white', border: '2px solid #1a1040', boxShadow: '4px 4px 0 #1a1040' }}
-          >
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="w-full max-w-sm rounded-3xl p-6 flex flex-col gap-4 text-center bg-white" style={{ border: '2px solid #1a1040', boxShadow: '4px 4px 0 #1a1040' }}>
             <div className="text-4xl">📋</div>
             <h3 className="font-bold text-base" style={{ fontFamily: 'var(--font-unbounded)', color: '#1a1040' }}>
               Profil tamamlanmayıb
@@ -564,7 +699,7 @@ export default function SellPage() {
               <button
                 onClick={() => setProfileCheckModal(false)}
                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold"
-                style={{ border: '2px solid #ccc', color: '#666' }}
+                style={{ border: '1.5px solid #d1d5db', color: '#6B7280' }}
               >
                 Ləğv et
               </button>
