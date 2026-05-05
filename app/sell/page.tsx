@@ -8,7 +8,7 @@ import CameraCapture, { type PhotoEntry } from '@/components/CameraCapture'
 import { CATEGORIES, SUBCATEGORIES, SIZES_BY_SUBCATEGORY, DEFAULT_SIZES, CATEGORY_EMOJIS } from '@/lib/sizes'
 import { sanitize } from '@/lib/sanitize'
 
-const steps = ['Foto', 'Məlumat', 'Qiymət', 'Yayımla']
+const steps = ['Məlumat', 'Qiymət', 'Yayımla']
 
 const conditions = [
   { value: 'new', label: 'Yeni', color: '#00E5CC', desc: 'Heç geyilməyib, etiket üstündə ola bilər' },
@@ -96,7 +96,7 @@ export default function SellPage() {
     setSubOpen(false)
   }
 
-  const step1Valid = !!(form.gender && form.category && form.subcategory && form.color && form.condition)
+  const step0Valid = !!(form.gender && form.category && form.subcategory && form.color && form.condition)
 
   const [profileCheckModal, setProfileCheckModal] = useState(false)
 
@@ -208,16 +208,21 @@ export default function SellPage() {
         ))}
       </div>
 
-      {/* ─── Step 0 — Photos ─────────────────────────────────────────── */}
+      {/* ─── Step 0 — Photos + Details ──────────────────────────────── */}
       {step === 0 && (
-        <CameraCapture userId={userId!} onChange={setPhotos} maxPhotos={5} />
-      )}
+        <div className="flex flex-col gap-6">
 
-      {/* ─── Step 1 — Details ───────────────────────────────────────── */}
-      {step === 1 && (
-        <div className="flex flex-col gap-5">
-          <h2 className="text-lg font-bold" style={{ color: '#1a1040' }}>Məlumatlar</h2>
+          {/* Photos */}
+          <div>
+            <p className="text-sm font-semibold mb-3" style={{ color: '#1a1040' }}>
+              Fotolar <span className="font-normal text-gray-400">(isteğe bağlı)</span>
+            </p>
+            <CameraCapture userId={userId!} onChange={setPhotos} maxPhotos={5} />
+          </div>
 
+          <div className="border-t border-gray-200" />
+
+          {/* Text fields */}
           <input
             className={inputClass}
             style={inputStyle}
@@ -248,7 +253,7 @@ export default function SellPage() {
             onChange={(e) => update('brand', e.target.value)}
           />
 
-          {/* ── Gender chips ── */}
+          {/* Gender chips */}
           <div>
             <p className="text-sm font-semibold mb-2" style={{ color: '#1a1040' }}>
               Kimə aiddir <span style={{ color: '#FF2D78' }}>*</span>
@@ -260,102 +265,72 @@ export default function SellPage() {
                 { value: 'usaq',  label: 'Uşaq'  },
                 { value: 'el',    label: 'Əl işi' },
               ].map((g) => (
-                <button
-                  key={g.value}
-                  onClick={() => {
-                    setForm((f) => ({ ...f, gender: g.value, category: '', subcategory: '', size: '' }))
-                    setSubSearch('')
-                  }}
-                  className="px-4 py-2 rounded-full text-sm font-semibold transition-all hover:scale-[1.02] active:scale-[0.98]"
-                  style={form.gender === g.value ? chipSelected : chipDefault}
-                >
+                <button key={g.value}
+                  onClick={() => { setForm((f) => ({ ...f, gender: g.value, category: '', subcategory: '', size: '' })); setSubSearch('') }}
+                  className="px-4 py-2 rounded-full text-sm font-semibold transition-all"
+                  style={form.gender === g.value ? chipSelected : chipDefault}>
                   {g.label}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* ── Category chips ── */}
+          {/* Category chips */}
           <div>
             <p className="text-sm font-semibold mb-2" style={{ color: '#1a1040' }}>
               Kateqoriya <span style={{ color: '#FF2D78' }}>*</span>
             </p>
             <div className="flex flex-wrap gap-2">
               {CATEGORIES.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => selectCategory(cat)}
-                  className="px-4 py-2 rounded-full text-sm font-semibold transition-all hover:scale-[1.02] active:scale-[0.98]"
-                  style={form.category === cat ? chipSelected : chipDefault}
-                >
+                <button key={cat} onClick={() => selectCategory(cat)}
+                  className="px-4 py-2 rounded-full text-sm font-semibold transition-all"
+                  style={form.category === cat ? chipSelected : chipDefault}>
                   {cat}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* ── Subcategory searchable dropdown ── */}
+          {/* Subcategory dropdown */}
           {form.category && (
             <div>
               <p className="text-sm font-semibold mb-2" style={{ color: '#1a1040' }}>
                 Növ <span style={{ color: '#FF2D78' }}>*</span>
               </p>
               <div className="relative">
-                <div
-                  className="flex items-center gap-2 px-4 py-3 rounded-xl cursor-text"
+                <div className="flex items-center gap-2 px-4 py-3 rounded-xl cursor-text"
                   style={{ border: `2px solid ${form.subcategory ? '#FF2D78' : '#1a1040'}`, backgroundColor: 'white' }}
-                  onClick={() => { setSubOpen(true); subInputRef.current?.focus() }}
-                >
+                  onClick={() => { setSubOpen(true); subInputRef.current?.focus() }}>
                   {form.subcategory && !subOpen ? (
                     <>
-                      <span className="flex-1 text-sm font-semibold" style={{ color: '#1a1040' }}>
-                        {form.subcategory}
-                      </span>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); selectSubcategory(''); setSubOpen(true); subInputRef.current?.focus() }}
-                        className="text-gray-400 hover:text-gray-700 text-lg leading-none flex-shrink-0"
-                      >
-                        ×
-                      </button>
+                      <span className="flex-1 text-sm font-semibold" style={{ color: '#1a1040' }}>{form.subcategory}</span>
+                      <button onClick={(e) => { e.stopPropagation(); selectSubcategory(''); setSubOpen(true); subInputRef.current?.focus() }}
+                        className="text-gray-400 hover:text-gray-700 text-lg leading-none flex-shrink-0">×</button>
                     </>
                   ) : (
-                    <input
-                      ref={subInputRef}
-                      type="text"
-                      value={subSearch}
+                    <input ref={subInputRef} type="text" value={subSearch}
                       onChange={(e) => { setSubSearch(e.target.value); setSubOpen(true) }}
                       onFocus={() => setSubOpen(true)}
                       onBlur={() => setTimeout(() => setSubOpen(false), 150)}
                       placeholder={form.subcategory || 'Növü axtar və ya seçin...'}
-                      className="flex-1 text-sm outline-none bg-transparent"
-                    />
+                      className="flex-1 text-sm outline-none bg-transparent" />
                   )}
                 </div>
-
                 {subOpen && filteredSubs.length > 0 && (
-                  <div
-                    className="absolute top-full left-0 right-0 z-20 mt-1 rounded-xl overflow-hidden overflow-y-auto"
-                    style={{ border: '2px solid #1a1040', backgroundColor: 'white', maxHeight: '220px', boxShadow: '3px 3px 0 #1a1040' }}
-                  >
+                  <div className="absolute top-full left-0 right-0 z-20 mt-1 rounded-xl overflow-hidden overflow-y-auto"
+                    style={{ border: '2px solid #1a1040', backgroundColor: 'white', maxHeight: '220px', boxShadow: '3px 3px 0 #1a1040' }}>
                     {filteredSubs.map((sub) => (
-                      <button
-                        key={sub}
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => selectSubcategory(sub)}
+                      <button key={sub} onMouseDown={(e) => e.preventDefault()} onClick={() => selectSubcategory(sub)}
                         className="w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-pink-50"
-                        style={sub === form.subcategory ? { backgroundColor: '#FFF0F5', fontWeight: 600, color: '#FF2D78' } : { color: '#1a1040' }}
-                      >
+                        style={sub === form.subcategory ? { backgroundColor: '#FFF0F5', fontWeight: 600, color: '#FF2D78' } : { color: '#1a1040' }}>
                         {sub}
                       </button>
                     ))}
                   </div>
                 )}
-
                 {subOpen && filteredSubs.length === 0 && (
-                  <div
-                    className="absolute top-full left-0 right-0 z-20 mt-1 rounded-xl px-4 py-3 text-sm text-gray-400"
-                    style={{ border: '2px solid #e5e7eb', backgroundColor: 'white' }}
-                  >
+                  <div className="absolute top-full left-0 right-0 z-20 mt-1 rounded-xl px-4 py-3 text-sm text-gray-400"
+                    style={{ border: '2px solid #e5e7eb', backgroundColor: 'white' }}>
                     Nəticə tapılmadı
                   </div>
                 )}
@@ -363,7 +338,7 @@ export default function SellPage() {
             </div>
           )}
 
-          {/* ── Color picker ── */}
+          {/* Color picker */}
           {form.subcategory && (
             <div>
               <p className="text-sm font-semibold mb-3" style={{ color: '#1a1040' }}>
@@ -373,50 +348,31 @@ export default function SellPage() {
                 {COLORS.map((c) => {
                   const selected = form.color === c.name
                   return (
-                    <button
-                      key={c.name}
-                      onClick={() => update('color', selected ? '' : c.name)}
-                      title={c.name}
+                    <button key={c.name} onClick={() => update('color', selected ? '' : c.name)} title={c.name}
                       className="w-10 h-10 rounded-full flex-shrink-0 transition-transform hover:scale-110 active:scale-95"
                       style={{
-                        background: c.hex === 'rainbow'
-                          ? 'conic-gradient(red, orange, yellow, green, cyan, blue, violet, red)'
-                          : c.hex,
-                        border: selected
-                          ? '3px solid #FF2D78'
-                          : c.border
-                          ? '2px solid #ccc'
-                          : '2px solid transparent',
+                        background: c.hex === 'rainbow' ? 'conic-gradient(red, orange, yellow, green, cyan, blue, violet, red)' : c.hex,
+                        border: selected ? '3px solid #FF2D78' : c.border ? '2px solid #ccc' : '2px solid transparent',
                         boxShadow: selected ? '0 0 0 2px white, 0 0 0 4px #FF2D78' : undefined,
-                      }}
-                    />
+                      }} />
                   )
                 })}
               </div>
-              {form.color && (
-                <p className="mt-2 text-xs font-semibold" style={{ color: '#FF2D78' }}>
-                  ✓ {form.color}
-                </p>
-              )}
+              {form.color && <p className="mt-2 text-xs font-semibold" style={{ color: '#FF2D78' }}>✓ {form.color}</p>}
             </div>
           )}
 
-          {/* ── Size chips ── */}
+          {/* Size chips */}
           {form.subcategory && (
             <div>
               <p className="text-sm font-semibold mb-2" style={{ color: '#1a1040' }}>Ölçü</p>
               <div className="flex flex-wrap gap-2">
                 {sizes.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => update('size', form.size === s ? '' : s)}
+                  <button key={s} onClick={() => update('size', form.size === s ? '' : s)}
                     className="min-w-[44px] px-3 py-2 rounded-xl text-xs font-bold transition-all"
-                    style={
-                      form.size === s
-                        ? { backgroundColor: '#FFE600', color: '#1a1040', border: '2px solid #1a1040' }
-                        : { backgroundColor: 'white', color: '#1a1040', border: '2px solid #ccc' }
-                    }
-                  >
+                    style={form.size === s
+                      ? { backgroundColor: '#FFE600', color: '#1a1040', border: '2px solid #1a1040' }
+                      : { backgroundColor: 'white', color: '#1a1040', border: '2px solid #ccc' }}>
                     {s}
                   </button>
                 ))}
@@ -424,23 +380,18 @@ export default function SellPage() {
             </div>
           )}
 
-          {/* ── Condition ── */}
+          {/* Condition */}
           <div>
             <p className="text-sm font-semibold mb-2" style={{ color: '#1a1040' }}>
               Vəziyyət <span style={{ color: '#FF2D78' }}>*</span>
             </p>
             <div className="flex flex-col gap-2">
               {conditions.map((c) => (
-                <button
-                  key={c.value}
-                  onClick={() => update('condition', c.value)}
+                <button key={c.value} onClick={() => update('condition', c.value)}
                   className="flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all"
-                  style={
-                    form.condition === c.value
-                      ? { border: `2px solid ${c.color}`, backgroundColor: `${c.color}20` }
-                      : { border: '2px solid #ccc', backgroundColor: 'white' }
-                  }
-                >
+                  style={form.condition === c.value
+                    ? { border: `2px solid ${c.color}`, backgroundColor: `${c.color}20` }
+                    : { border: '2px solid #ccc', backgroundColor: 'white' }}>
                   <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: c.color }} />
                   <div>
                     <div className="text-sm font-semibold">{c.label}</div>
@@ -451,8 +402,7 @@ export default function SellPage() {
             </div>
           </div>
 
-          {/* Validation hint */}
-          {!step1Valid && (
+          {!step0Valid && (
             <p className="text-xs text-gray-400">
               {!form.gender ? '↑ Kimə aid olduğu seçilməlidir'
                 : !form.category ? '↑ Kateqoriya seçilməlidir'
@@ -464,8 +414,8 @@ export default function SellPage() {
         </div>
       )}
 
-      {/* ─── Step 2 — Price ─────────────────────────────────────────── */}
-      {step === 2 && (
+      {/* ─── Step 1 — Price ─────────────────────────────────────────── */}
+      {step === 1 && (
         <div className="flex flex-col gap-6">
           <h2 className="text-lg font-bold" style={{ color: '#1a1040' }}>Qiymət</h2>
           <div
@@ -491,8 +441,8 @@ export default function SellPage() {
         </div>
       )}
 
-      {/* ─── Step 3 — Publish ───────────────────────────────────────── */}
-      {step === 3 && (
+      {/* ─── Step 2 — Publish ───────────────────────────────────────── */}
+      {step === 2 && (
         <div className="text-center flex flex-col items-center gap-4 py-6">
           <div className="text-6xl">🎉</div>
           <h2 className="text-xl font-bold" style={{ fontFamily: 'var(--font-unbounded)', color: '#1a1040' }}>
@@ -581,10 +531,10 @@ export default function SellPage() {
         {step < steps.length - 1 && (
           <button
             onClick={() => {
-              if (step === 1 && !step1Valid) return
+              if (step === 0 && !step0Valid) return
               setStep((s) => Math.min(steps.length - 1, s + 1))
             }}
-            disabled={step === 1 && !step1Valid}
+            disabled={step === 0 && !step0Valid}
             className="px-5 py-2.5 rounded-xl font-bold text-white text-sm transition-transform hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ backgroundColor: '#FF2D78' }}
           >

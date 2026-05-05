@@ -38,7 +38,10 @@ export type Database = {
           description_az: string | null
           description_ru: string | null
           price: number
+          gender: string | null
           category: string | null
+          subcategory: string | null
+          color: string | null
           size: string | null
           brand: string | null
           condition: 'new' | 'good' | 'fair'
