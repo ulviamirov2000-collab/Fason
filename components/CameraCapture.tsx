@@ -245,46 +245,22 @@ export default function CameraCapture({ userId, onChange, maxPhotos = 5 }: Props
         <p className="text-sm font-semibold mb-3" style={{ color: '#1a1040' }}>
           Məhsul növü <span className="font-normal text-gray-400">(isteğe bağlı)</span>
         </p>
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+        <div className="flex flex-wrap gap-2">
           {guides.map((g) => {
             const active = selectedGuide === g.id
             return (
               <button
                 key={g.id}
                 onClick={() => setSelectedGuide(g.id)}
-                className="flex-shrink-0 flex flex-col items-center gap-1.5 rounded-2xl p-2 transition-all"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-all"
                 style={
                   active
-                    ? { backgroundColor: '#1a1040', border: '2px solid #FF2D78', minWidth: 62 }
-                    : { backgroundColor: 'white', border: '2px solid #e5e7eb', minWidth: 62 }
+                    ? { backgroundColor: '#FF2D78', border: '2px solid #1a1040', color: 'white' }
+                    : { backgroundColor: 'white', border: '2px solid #1a1040', color: '#1a1040' }
                 }
               >
-                {/* Mini shape preview card */}
-                <div
-                  className="w-full rounded-xl flex items-center justify-center"
-                  style={{ backgroundColor: active ? '#2d1f5e' : '#0f0830', height: 48, padding: 6 }}
-                >
-                  {g.id !== 'none' ? (
-                    <svg
-                      viewBox={g.viewBox}
-                      fill="none"
-                      stroke="white"
-                      strokeWidth="4"
-                      style={{ width: 28, height: 28, opacity: 0.8 }}
-                    >
-                      {g.paths}
-                    </svg>
-                  ) : (
-                    <span className="text-white/40 text-xs">—</span>
-                  )}
-                </div>
-                <span className="text-sm leading-none">{g.icon}</span>
-                <span
-                  className="text-xs font-semibold leading-none"
-                  style={{ color: active ? 'white' : '#1a1040' }}
-                >
-                  {g.label}
-                </span>
+                <span>{g.icon}</span>
+                <span>{g.label}</span>
               </button>
             )
           })}
