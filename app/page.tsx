@@ -313,6 +313,99 @@ function HomePageContent() {
         </div>
       </section>
 
+      {/* ── Kuryerlər üçün ── */}
+      <section
+        id="couriers"
+        className="w-full py-20 px-4"
+        style={{ backgroundColor: '#FAF7F2' }}
+      >
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-10">
+            <span
+              className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest mb-3"
+              style={{ backgroundColor: '#FFE600', color: '#1a1040', border: '1.5px solid #1a1040' }}
+            >
+              Tezliklə
+            </span>
+            <p className="text-xs font-bold tracking-widest uppercase mb-2" style={{ color: '#FF2D78' }}>
+              Əməkdaşlıq
+            </p>
+            <h2
+              className="text-2xl sm:text-3xl font-bold"
+              style={{ fontFamily: 'var(--font-unbounded)', color: '#1a1040' }}
+            >
+              Kuryerlər üçün
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed max-w-lg mx-auto text-gray-500">
+              FASON-un kuryer tərəfdaşı ol. Aktiv elanları, çatdırılma rayonlarını və qiymətləri real vaxtda izlə — öz sürətinlə işlə.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
+            {[
+              {
+                icon: (
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#FF2D78" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                  </svg>
+                ),
+                title: 'Real vaxt elanlar',
+                desc: 'Yeni çatdırılma tələbləri dərhal görünür — gecikdirmə yoxdur.',
+              },
+              {
+                icon: (
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#FF2D78" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                  </svg>
+                ),
+                title: 'Rayon xəritəsi',
+                desc: 'Hansı ərazidə nə qədər elan olduğunu görüb marşrut qur.',
+              },
+              {
+                icon: (
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#FF2D78" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                  </svg>
+                ),
+                title: 'Şəffaf qiymətlər',
+                desc: 'Hər çatdırılma üçün əvvəlcədən müəyyən edilmiş tarif.',
+              },
+            ].map((item) => (
+              <div
+                key={item.title}
+                className="flex flex-col gap-3 p-6 rounded-2xl bg-white"
+                style={{ border: '1.5px solid #e5e7eb' }}
+              >
+                <div>{item.icon}</div>
+                <p className="font-bold text-sm" style={{ color: '#1a1040' }}>{item.title}</p>
+                <p className="text-xs leading-relaxed text-gray-500">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+
+          <div
+            className="flex flex-col sm:flex-row items-center justify-between gap-6 p-6 sm:p-8 rounded-2xl"
+            style={{ backgroundColor: '#1a1040', border: '2px solid #1a1040' }}
+          >
+            <div>
+              <p className="font-bold text-white text-base" style={{ fontFamily: 'var(--font-unbounded)' }}>
+                Hazırsansa, siyahıya əlavə ol
+              </p>
+              <p className="text-sm mt-1" style={{ color: 'rgba(255,255,255,0.55)' }}>
+                Kuryer portalı açılarkən ilk xəbər sən alacaqsan.
+              </p>
+            </div>
+            <a
+              href="mailto:fason.store@gmail.com?subject=Kuryer əməkdaşlığı"
+              className="flex-shrink-0 px-7 py-3.5 rounded-2xl font-bold text-sm transition-transform hover:scale-[1.02] active:scale-[0.98]"
+              style={{ backgroundColor: '#FFE600', color: '#1a1040', border: '2px solid #FFE600', boxShadow: '3px 3px 0 rgba(255,255,255,0.15)' }}
+            >
+              Maraqlanıram →
+            </a>
+          </div>
+        </div>
+      </section>
+
       {/* ── Əlaqə ── */}
       <section
         id="contact"

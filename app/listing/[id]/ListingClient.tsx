@@ -40,6 +40,7 @@ export default function ListingClient({ id }: { id: string }) {
 
   const [listing,       setListing]       = useState<FullListing | null>(null)
   const [activeImg,     setActiveImg]     = useState(0)
+  const [lightboxOpen,  setLightboxOpen]  = useState(false)
   const [loading,       setLoading]       = useState(true)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [adminUserId,   setAdminUserId]   = useState<string | null>(null)
@@ -127,6 +128,20 @@ export default function ListingClient({ id }: { id: string }) {
     setCommentLoading(false)
     setCommentWarning(false)
   }
+
+  // Keyboard nav for lightbox
+  useEffect(() => {
+    if (!lightboxOpen) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setLightboxOpen(false)
+      if (e.key === 'ArrowRight' && listing?.images?.length)
+        setActiveImg(i => (i + 1) % listing.images.length)
+      if (e.key === 'ArrowLeft' && listing?.images?.length)
+        setActiveImg(i => (i - 1 + listing.images.length) % listing.images.length)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [lightboxOpen, listing])
 
   async function deleteComment(commentId: string) {
     await supabase.from('comments').delete().eq('id', commentId)
@@ -223,7 +238,8 @@ export default function ListingClient({ id }: { id: string }) {
               {/* Main image */}
               <div
                 className="relative flex-1 rounded-2xl overflow-hidden bg-gradient-to-br from-pink-50 to-yellow-50 flex items-center justify-center"
-                style={{ aspectRatio: '3/4', maxHeight: 620, border: '2px solid #e5e7eb' }}
+                style={{ aspectRatio: '3/4', maxHeight: 620, border: '2px solid #e5e7eb', cursor: hasImages ? 'zoom-in' : 'default' }}
+                onClick={() => hasImages && setLightboxOpen(true)}
               >
                 {hasImages ? (
                   <Image
@@ -235,6 +251,28 @@ export default function ListingClient({ id }: { id: string }) {
                   />
                 ) : (
                   <span className="text-8xl">👗</span>
+                )}
+
+                {/* Arrow nav on main image (only if multiple images) */}
+                {hasImages && listing.images.length > 1 && (
+                  <>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setActiveImg(i => (i - 1 + listing.images.length) % listing.images.length) }}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full flex items-center justify-center transition-opacity hover:opacity-100 opacity-70"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.9)', border: '1.5px solid #e5e7eb', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
+                      aria-label="Əvvəlki"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1a1040" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setActiveImg(i => (i + 1) % listing.images.length) }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full flex items-center justify-center transition-opacity hover:opacity-100 opacity-70"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.9)', border: '1.5px solid #e5e7eb', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
+                      aria-label="Növbəti"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1a1040" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+                  </>
                 )}
 
                 {listing.status !== 'active' && (
@@ -609,6 +647,74 @@ export default function ListingClient({ id }: { id: string }) {
           )}
         </div>
       </main>
+
+      {/* ── Lightbox ── */}
+      {lightboxOpen && hasImages && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center"
+          style={{ backgroundColor: 'rgba(0,0,0,0.96)' }}
+          onClick={() => setLightboxOpen(false)}
+        >
+          {/* Image container */}
+          <div
+            className="relative"
+            style={{ width: '90vw', height: '90vh', maxWidth: 900 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Image
+              src={listing!.images[activeImg]}
+              alt={listing!.title_az}
+              fill
+              className="object-contain"
+              unoptimized
+            />
+          </div>
+
+          {/* Left arrow */}
+          {listing!.images.length > 1 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setActiveImg(i => (i - 1 + listing!.images.length) % listing!.images.length) }}
+              className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full flex items-center justify-center transition-all hover:bg-white/20"
+              style={{ backgroundColor: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.25)' }}
+              aria-label="Əvvəlki"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+          )}
+
+          {/* Right arrow */}
+          {listing!.images.length > 1 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setActiveImg(i => (i + 1) % listing!.images.length) }}
+              className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full flex items-center justify-center transition-all hover:bg-white/20"
+              style={{ backgroundColor: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.25)' }}
+              aria-label="Növbəti"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          )}
+
+          {/* Close */}
+          <button
+            onClick={() => setLightboxOpen(false)}
+            className="absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center transition-all hover:bg-white/20"
+            style={{ backgroundColor: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)' }}
+            aria-label="Bağla"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+
+          {/* Counter */}
+          {listing!.images.length > 1 && (
+            <div
+              className="absolute bottom-5 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full text-white text-sm font-semibold"
+              style={{ backgroundColor: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)' }}
+            >
+              {activeImg + 1} / {listing!.images.length}
+            </div>
+          )}
+        </div>
+      )}
 
       {chatOpen && adminUserId && currentUserId && (
         <ChatDrawer
